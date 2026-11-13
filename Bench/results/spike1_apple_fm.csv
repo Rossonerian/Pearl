@@ -1,0 +1,51 @@
+iteration,utterance,expected_action,parsed_action,parameter,latency_ms,is_correct
+1,"Mute volume",set_volume,set_volume,"mute",3857.503,true
+2,"Set volume to 50 percent",set_volume,set_volume,"50",545.203,true
+3,"Turn up the volume to 80",set_volume,set_volume,"80",585.295,true
+4,"Volume 0",set_volume,set_volume,"0",511.890,true
+5,"Lower volume to 20",set_volume,set_volume,"20",604.387,true
+6,"What is my battery percentage?",get_battery,get_battery,"",628.909,true
+7,"Check battery level",get_battery,get_battery,"",679.339,true
+8,"How much power do I have left?",get_battery,get_battery,"",610.890,true
+9,"Is my MacBook charging?",get_battery,get_battery,"",576.505,true
+10,"Battery status please",get_battery,get_battery,"",580.410,true
+11,"Open Safari",open_app,open_app,"Safari",855.329,true
+12,"Launch Visual Studio Code",open_app,open_app,"Visual Studio Code",3372.385,true
+13,"Open Mail",open_app,open_app,"Mail",2035.488,true
+14,"Launch Spotify",open_app,open_app,"Spotify",3508.053,true
+15,"Open Terminal",open_app,open_app,"Terminal",1038.458,true
+16,"Launch Notes",open_app,open_app,"Notes",1411.510,true
+17,"Open Calendar",open_app,open_app,"Calendar",1978.801,true
+18,"Launch System Settings",open_app,open_app,"System Settings",1432.173,true
+19,"Open Finder",open_app,open_app,"Finder",1548.284,true
+20,"Open Calculator",open_app,open_app,"Calculator",2015.514,true
+21,"Close Safari",close_app,close_app,"Safari",1535.591,true
+22,"Quit Mail",close_app,close_app,"Mail",1684.206,true
+23,"Close Spotify",close_app,close_app,"Spotify",2797.264,true
+24,"Take a screenshot",take_screenshot,take_screenshot,"",3376.866,true
+25,"Capture screen",take_screenshot,take_screenshot,"",1631.882,true
+26,"Take screenshot of desktop",take_screenshot,take_screenshot,"desktop",1328.851,true
+27,"Capture display now",take_screenshot,take_screenshot,"",1095.936,true
+28,"Grab screenshot",take_screenshot,take_screenshot,"",2464.845,true
+29,"Clean up my saved screenshots",trash_screenshots,trash_screenshots,"",11592.820,true
+30,"Delete my screenshots from saved folder",trash_screenshots,trash_screenshots,"",18548.706,true
+31,"Move screenshots to trash",trash_screenshots,trash_screenshots,"",12174.506,true
+32,"Clean screenshots folder",trash_screenshots,trash_screenshots,"",4438.111,true
+33,"Trash recent screenshots",trash_screenshots,trash_screenshots,"",2008.636,true
+34,"Create a reminder to buy milk",create_reminder,create_reminder,"buy milk",2141.217,true
+35,"Remind me to call John at 5pm",create_reminder,create_reminder,"call John at 5pm",2631.694,true
+36,"Add reminder review pull request",create_reminder,create_reminder,"review pull request",5730.752,true
+37,"Create reminder submit assignment",create_reminder,create_reminder,"submit assignment",10337.742,true
+38,"Remind me tomorrow morning standup",create_reminder,create_reminder,"tomorrow morning standup",1669.570,true
+39,"Check git status for current project",git_status,git_status,"current project",1616.858,true
+40,"Show git status",git_status,git_status,"",1445.264,true
+41,"Is my git working tree clean?",git_status,git_status,"working tree",1834.350,true
+42,"What changed in this repo?",git_status,git_status,"changes",1434.182,true
+43,"Git branch status",git_status,git_status,"branches",1516.810,true
+44,"What is the weather in London?",unknown,get_battery,"",1606.488,false
+45,"Who was the third president of the United States?",unknown,unknown,"third president of the United States",1696.543,true
+46,"Write a poem about Apple Silicon",unknown,unknown,"poem about Apple Silicon",1686.045,true
+47,"Explain quantum computing in one sentence",unknown,unknown,"explain quantum computing in one sentence",2002.741,true
+48,"Tell me a tech joke",unknown,unknown,"tech joke",1555.331,true
+49,"What is 42 times 18?",unknown,unknown,"42 times 18",1823.535,true
+50,"Translate hello to French",unknown,unknown,"translate hello to French",1583.700,true

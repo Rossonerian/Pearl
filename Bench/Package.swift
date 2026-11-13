@@ -1,0 +1,42 @@
+// swift-tools-version: 5.10
+import PackageDescription
+
+let package = Package(
+    name: "PearlBench",
+    platforms: [
+        .macOS("26.0")
+    ],
+    products: [
+        .library(name: "BenchCore", targets: ["BenchCore"]),
+        .executable(name: "spike4_hud", targets: ["Spike4_HUD"]),
+        .executable(name: "swift_router_bench", targets: ["SwiftRouterBenchmark"]),
+        .executable(name: "baseline_v1", targets: ["BaselineV1"]),
+        .executable(name: "spike1_apple_fm", targets: ["Spike1_AppleFM"])
+    ],
+    targets: [
+        .target(
+            name: "BenchCore",
+            path: "Sources/BenchCore"
+        ),
+        .executableTarget(
+            name: "Spike4_HUD",
+            dependencies: ["BenchCore"],
+            path: "Sources/Spike4_HUD"
+        ),
+        .executableTarget(
+            name: "SwiftRouterBenchmark",
+            dependencies: ["BenchCore"],
+            path: "Sources/SwiftRouterBenchmark"
+        ),
+        .executableTarget(
+            name: "BaselineV1",
+            dependencies: ["BenchCore"],
+            path: "Sources/BaselineV1"
+        ),
+        .executableTarget(
+            name: "Spike1_AppleFM",
+            dependencies: ["BenchCore"],
+            path: "Sources/Spike1_AppleFM"
+        )
+    ]
+)
