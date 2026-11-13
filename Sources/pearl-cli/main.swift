@@ -1,5 +1,6 @@
 import Foundation
 import PearlCore
+import PearlMCP
 import PearlMemory
 
 signal(SIGPIPE, SIG_IGN)
@@ -74,6 +75,7 @@ guard !args.isEmpty else {
     Usage:
       pearl ping                  Check daemon status & latency
       pearl status                Show resident memory & active state
+      pearl mcp                   Launch native MCP server over stdio
       pearl doctor [--security]   Run security audit & integrity checks
       pearl show                  Show floating pill HUD
       pearl hide                  Hide floating pill HUD
@@ -88,6 +90,10 @@ guard !args.isEmpty else {
 
 let cmd = args[0].lowercased()
 switch cmd {
+case "mcp":
+    let server = MCPServer()
+    server.runStdioLoop()
+    exit(0)
 case "doctor":
     let isSecurity = args.contains("--security") || args.count == 1
     let code = DoctorCommand.run(securityOnly: isSecurity)

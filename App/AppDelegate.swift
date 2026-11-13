@@ -93,6 +93,8 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         reg.register(ScreenshotTool())
         reg.register(TrashScreenshotsTool())
         reg.register(GitTool())
+        reg.register(GitStatusTool())
+        reg.register(FrontmostAppTool())
         reg.register(UndoTool())
         reg.register(ReminderTool())
     }

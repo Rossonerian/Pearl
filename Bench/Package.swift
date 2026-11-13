@@ -18,7 +18,8 @@ let package = Package(
         .executable(name: "voice_e2e", targets: ["VoiceE2E"]),
         .executable(name: "llm_path", targets: ["LLMPathBenchmark"]),
         .executable(name: "memory_bench", targets: ["MemoryBenchmark"]),
-        .executable(name: "security_bench", targets: ["SecurityBenchmark"])
+        .executable(name: "security_bench", targets: ["SecurityBenchmark"]),
+        .executable(name: "mcp_bench", targets: ["MCPVerification"])
     ],
     dependencies: [
         .package(path: "..")
@@ -43,11 +44,11 @@ let package = Package(
             dependencies: ["BenchCore"],
             path: "Sources/BaselineV1"
         ),
-        .executableTarget(
-            name: "Spike1_AppleFM",
-            dependencies: ["BenchCore"],
-            path: "Sources/Spike1_AppleFM"
-        ),
+        // .executableTarget(
+        //     name: "Spike1_AppleFM",
+        //     dependencies: ["BenchCore"],
+        //     path: "Sources/Spike1_AppleFM"
+        // ),
         .executableTarget(
             name: "M1Verification",
             dependencies: [
@@ -109,6 +110,16 @@ let package = Package(
                 .product(name: "PearlTools", package: "Pearl")
             ],
             path: "Sources/SecurityBenchmark"
+        ),
+        .executableTarget(
+            name: "MCPVerification",
+            dependencies: [
+                "BenchCore",
+                .product(name: "PearlMCP", package: "Pearl"),
+                .product(name: "PearlCore", package: "Pearl"),
+                .product(name: "PearlTools", package: "Pearl")
+            ],
+            path: "Sources/MCPVerification"
         )
     ]
 )
