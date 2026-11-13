@@ -1,6 +1,7 @@
 import AppKit
 import Foundation
 import PearlCore
+import PearlTools
 
 public final class AppDelegate: NSObject, NSApplicationDelegate {
     private var hudPanel: HUDPanel!
@@ -35,7 +36,10 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         CarbonHotkeyManager.shared.registerDefaultHotkey()
         
-        // 4. Setup Unix Domain Socket Server for CLI
+        // 4. Register Native Typed Tools
+        registerNativeTools()
+        
+        // 5. Setup Unix Domain Socket Server for CLI
         socketServer = UnixSocketServer(socketPath: config.socketPath)
         socketServer.onCommandHandler = { [weak self] request in
             return self?.handleIPCRequest(request) ?? IPCResponse(id: request.id, success: false, message: "Server shutting down")
@@ -48,7 +52,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
             NSLog("[Pearl] Failed to start IPC socket server: %@", error.localizedDescription)
         }
         
-        // 5. Memory Pressure Warning Source
+        // 6. Memory Pressure Warning Source
         let memSource = DispatchSource.makeMemoryPressureSource(eventMask: [.warning, .critical], queue: .main)
         memSource.setEventHandler { [weak self] in
             let mask = memSource.mask
@@ -69,6 +73,19 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         memoryPressureSource?.cancel()
     }
     
+    private func registerNativeTools() {
+        let reg = ToolRegistry.shared
+        reg.register(BatteryTool())
+        reg.register(VolumeTool())
+        reg.register(AppTool())
+        reg.register(CloseAppTool())
+        reg.register(ScreenshotTool())
+        reg.register(TrashScreenshotsTool())
+        reg.register(GitTool())
+        reg.register(UndoTool())
+        reg.register(ReminderTool())
+    }
+    
     private func toggleHUD() {
         if hudPanel.isPillVisible {
             hudPanel.hidePill()
@@ -79,7 +96,6 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     
     private func handleMemoryPressure() {
         hudPanel?.hidePill()
-        // Signal cache purges if needed
     }
     
     private func handleIPCRequest(_ req: IPCRequest) -> IPCResponse {
@@ -120,6 +136,37 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
                 hudPanel.hidePill()
             }
             responseMessage = "HUD panel hidden"
+            
+        case "execute":
+            let query = req.arguments?["query"] ?? ""
+            if let intent = DeterministicRouter.shared.resolve(utterance: query) {
+                if let tool = ToolRegistry.shared.tool(named: intent.toolName) {
+                    let sema = DispatchSemaphore(value: 0)
+                    var toolRes: ToolResult?
+                    Task {
+                        let ctx = ToolExecutionContext(trustState: .trusted, userConfirmed: false)
+                        toolRes = try? await PolicyEngine.shared.execute(tool: tool, args: intent.arguments, context: ctx)
+                        sema.signal()
+                    }
+                    sema.wait()
+                    if let r = toolRes {
+                        responseMessage = r.message
+                        isSuccess = r.success
+                        DispatchQueue.main.async {
+                            self.hudPanel.showPill(text: r.message, thinking: false)
+                        }
+                    } else {
+                        responseMessage = "Execution failed."
+                        isSuccess = false
+                    }
+                } else {
+                    responseMessage = "Tool '\(intent.toolName)' not registered."
+                    isSuccess = false
+                }
+            } else {
+                responseMessage = "Unmatched query (ready for local LLM tier): \(query)"
+                isSuccess = true
+            }
             
         case "quit":
             responseMessage = "Pearl daemon terminating"

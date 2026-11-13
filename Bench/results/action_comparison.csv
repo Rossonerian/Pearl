@@ -1,0 +1,4 @@
+action,osascript_p50_ms,cached_applescript_p50_ms,native_swift_p50_ms,speedup_factor
+set_volume,133.434,0.241,0.1588,840.3
+frontmost_app,202.668,N/A,0.0003,694861.1
+battery_status,N/A,N/A,0.0007,N/A

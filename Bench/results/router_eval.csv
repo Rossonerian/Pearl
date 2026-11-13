@@ -1,0 +1,852 @@
+iteration,utterance,expected_tool,resolved_tool,is_correct,latency_ms
+1,"set volume to 0",volume,volume,true,2.9872
+2,"volume 0",volume,volume,true,0.0472
+3,"set volume to 2",volume,volume,true,0.0417
+4,"volume 2",volume,volume,true,0.0323
+5,"set volume to 4",volume,volume,true,0.0297
+6,"volume 4",volume,volume,true,0.0288
+7,"set volume to 6",volume,volume,true,0.0318
+8,"volume 6",volume,volume,true,0.0296
+9,"set volume to 8",volume,volume,true,0.0314
+10,"volume 8",volume,volume,true,0.0254
+11,"set volume to 10",volume,volume,true,0.0303
+12,"volume 10",volume,volume,true,0.0254
+13,"set volume to 12",volume,volume,true,0.0305
+14,"volume 12",volume,volume,true,0.0222
+15,"set volume to 14",volume,volume,true,0.0307
+16,"volume 14",volume,volume,true,0.0215
+17,"set volume to 16",volume,volume,true,0.0275
+18,"volume 16",volume,volume,true,0.0212
+19,"set volume to 18",volume,volume,true,0.0310
+20,"volume 18",volume,volume,true,0.0216
+21,"set volume to 20",volume,volume,true,0.0275
+22,"volume 20",volume,volume,true,0.0244
+23,"set volume to 22",volume,volume,true,0.0272
+24,"volume 22",volume,volume,true,0.0244
+25,"set volume to 24",volume,volume,true,0.0273
+26,"volume 24",volume,volume,true,0.0209
+27,"set volume to 26",volume,volume,true,0.0269
+28,"volume 26",volume,volume,true,0.0240
+29,"set volume to 28",volume,volume,true,0.0269
+30,"volume 28",volume,volume,true,0.0209
+31,"set volume to 30",volume,volume,true,0.0267
+32,"volume 30",volume,volume,true,0.0240
+33,"set volume to 32",volume,volume,true,0.0270
+34,"volume 32",volume,volume,true,0.0208
+35,"set volume to 34",volume,volume,true,0.0302
+36,"volume 34",volume,volume,true,0.0212
+37,"set volume to 36",volume,volume,true,0.0267
+38,"volume 36",volume,volume,true,0.0210
+39,"set volume to 38",volume,volume,true,0.0266
+40,"volume 38",volume,volume,true,0.0205
+41,"set volume to 40",volume,volume,true,0.0296
+42,"volume 40",volume,volume,true,0.0212
+43,"set volume to 42",volume,volume,true,0.0295
+44,"volume 42",volume,volume,true,0.0207
+45,"set volume to 44",volume,volume,true,0.0266
+46,"volume 44",volume,volume,true,0.0203
+47,"set volume to 46",volume,volume,true,0.0262
+48,"volume 46",volume,volume,true,0.0204
+49,"set volume to 48",volume,volume,true,0.0265
+50,"volume 48",volume,volume,true,0.0203
+51,"set volume to 50",volume,volume,true,0.0263
+52,"volume 50",volume,volume,true,0.0204
+53,"set volume to 52",volume,volume,true,0.0261
+54,"volume 52",volume,volume,true,0.0203
+55,"set volume to 54",volume,volume,true,0.0263
+56,"volume 54",volume,volume,true,0.0205
+57,"set volume to 56",volume,volume,true,0.0263
+58,"volume 56",volume,volume,true,0.0239
+59,"set volume to 58",volume,volume,true,0.0267
+60,"volume 58",volume,volume,true,0.0204
+61,"set volume to 60",volume,volume,true,0.0265
+62,"volume 60",volume,volume,true,0.0203
+63,"set volume to 62",volume,volume,true,0.0295
+64,"volume 62",volume,volume,true,0.0211
+65,"set volume to 64",volume,volume,true,0.0265
+66,"volume 64",volume,volume,true,0.0203
+67,"set volume to 66",volume,volume,true,0.0264
+68,"volume 66",volume,volume,true,0.0204
+69,"set volume to 68",volume,volume,true,0.0260
+70,"volume 68",volume,volume,true,0.0204
+71,"set volume to 70",volume,volume,true,0.0263
+72,"volume 70",volume,volume,true,0.0203
+73,"set volume to 72",volume,volume,true,0.0297
+74,"volume 72",volume,volume,true,0.0307
+75,"set volume to 74",volume,volume,true,0.0263
+76,"volume 74",volume,volume,true,0.0204
+77,"set volume to 76",volume,volume,true,0.0262
+78,"volume 76",volume,volume,true,0.0206
+79,"set volume to 78",volume,volume,true,0.0264
+80,"volume 78",volume,volume,true,0.0203
+81,"set volume to 80",volume,volume,true,0.0262
+82,"volume 80",volume,volume,true,0.0204
+83,"set volume to 82",volume,volume,true,0.0294
+84,"volume 82",volume,volume,true,0.0209
+85,"set volume to 84",volume,volume,true,0.1290
+86,"volume 84",volume,volume,true,0.1063
+87,"set volume to 86",volume,volume,true,0.0302
+88,"volume 86",volume,volume,true,0.0495
+89,"set volume to 88",volume,volume,true,0.0271
+90,"volume 88",volume,volume,true,0.0206
+91,"set volume to 90",volume,volume,true,0.0267
+92,"volume 90",volume,volume,true,0.0204
+93,"set volume to 92",volume,volume,true,0.0263
+94,"volume 92",volume,volume,true,0.0205
+95,"set volume to 94",volume,volume,true,0.0261
+96,"volume 94",volume,volume,true,0.0204
+97,"set volume to 96",volume,volume,true,0.0261
+98,"volume 96",volume,volume,true,0.0203
+99,"set volume to 98",volume,volume,true,0.0260
+100,"volume 98",volume,volume,true,0.0204
+101,"set volume to 100",volume,volume,true,0.0274
+102,"volume 100",volume,volume,true,0.0230
+103,"mute volume",volume,volume,true,0.0090
+104,"mute",volume,volume,true,0.0058
+105,"silence",volume,volume,true,0.0068
+106,"mute audio",volume,volume,true,0.0078
+107,"turn sound off",volume,none,false,0.0190
+108,"unmute",volume,volume,true,0.0064
+109,"unmute audio",volume,volume,true,0.0087
+110,"unmute sound",volume,volume,true,0.0089
+111,"battery level",battery,battery,true,0.0073
+112,"pearl battery level",battery,battery,true,0.0110
+113,"please battery level",battery,battery,true,0.0107
+114,"battery status",battery,battery,true,0.0075
+115,"pearl battery status",battery,battery,true,0.0107
+116,"please battery status",battery,battery,true,0.0113
+117,"how much battery do I have",battery,battery,true,0.0134
+118,"pearl how much battery do I have",battery,battery,true,0.0182
+119,"please how much battery do I have",battery,battery,true,0.0160
+120,"check battery",battery,battery,true,0.0076
+121,"pearl check battery",battery,battery,true,0.0105
+122,"please check battery",battery,battery,true,0.0108
+123,"what is my battery percentage",battery,battery,true,0.0139
+124,"pearl what is my battery percentage",battery,battery,true,0.0163
+125,"please what is my battery percentage",battery,battery,true,0.0166
+126,"is my macbook charging",battery,battery,true,0.0141
+127,"pearl is my macbook charging",battery,battery,true,0.0173
+128,"please is my macbook charging",battery,battery,true,0.0173
+129,"power level",battery,battery,true,0.0074
+130,"pearl power level",battery,battery,true,0.0107
+131,"please power level",battery,battery,true,0.0112
+132,"battery percentage please",battery,battery,true,0.0119
+133,"pearl battery percentage please",battery,battery,true,0.0141
+134,"please battery percentage please",battery,battery,true,0.0142
+135,"am I on battery power",battery,battery,true,0.0121
+136,"pearl am I on battery power",battery,battery,true,0.0144
+137,"please am I on battery power",battery,battery,true,0.0140
+138,"check power level",battery,battery,true,0.0107
+139,"pearl check power level",battery,battery,true,0.0131
+140,"please check power level",battery,battery,true,0.0135
+141,"is laptop plugged into power",battery,none,false,0.0342
+142,"pearl is laptop plugged into power",battery,none,false,0.0390
+143,"please is laptop plugged into power",battery,none,false,0.0400
+144,"battery info",battery,battery,true,0.0068
+145,"pearl battery info",battery,battery,true,0.0097
+146,"please battery info",battery,battery,true,0.0100
+147,"show battery",battery,battery,true,0.0071
+148,"pearl show battery",battery,battery,true,0.0101
+149,"please show battery",battery,battery,true,0.0103
+150,"take screenshot",screenshot,screenshot,true,0.0152
+151,"please take screenshot",screenshot,screenshot,true,0.0215
+152,"pearl take screenshot",screenshot,screenshot,true,0.0205
+153,"capture screen",screenshot,screenshot,true,0.0152
+154,"please capture screen",screenshot,screenshot,true,0.0221
+155,"pearl capture screen",screenshot,screenshot,true,0.0213
+156,"grab screen",screenshot,screenshot,true,0.0130
+157,"please grab screen",screenshot,screenshot,true,0.0203
+158,"pearl grab screen",screenshot,screenshot,true,0.0190
+159,"take a screenshot",screenshot,screenshot,true,0.0176
+160,"please take a screenshot",screenshot,screenshot,true,0.0227
+161,"pearl take a screenshot",screenshot,screenshot,true,0.0222
+162,"capture my screen",screenshot,none,false,0.0231
+163,"please capture my screen",screenshot,none,false,0.0296
+164,"pearl capture my screen",screenshot,none,false,0.0290
+165,"take screenshot now",screenshot,screenshot,true,0.0187
+166,"please take screenshot now",screenshot,screenshot,true,0.0239
+167,"pearl take screenshot now",screenshot,screenshot,true,0.0231
+168,"grab screenshot",screenshot,screenshot,true,0.0150
+169,"please grab screenshot",screenshot,screenshot,true,0.0212
+170,"pearl grab screenshot",screenshot,screenshot,true,0.0204
+171,"take a screenshot of desktop",screenshot,screenshot,true,0.0257
+172,"please take a screenshot of desktop",screenshot,screenshot,true,0.0309
+173,"pearl take a screenshot of desktop",screenshot,screenshot,true,0.0298
+174,"capture display",screenshot,none,false,0.0195
+175,"please capture display",screenshot,none,false,0.0281
+176,"pearl capture display",screenshot,none,false,0.0271
+177,"clean up screenshots",trash_screenshots,trash_screenshots,true,0.0176
+178,"please clean up screenshots",trash_screenshots,trash_screenshots,true,0.0222
+179,"trash screenshots",trash_screenshots,trash_screenshots,true,0.0160
+180,"please trash screenshots",trash_screenshots,trash_screenshots,true,0.0208
+181,"clean screenshots folder",trash_screenshots,trash_screenshots,true,0.0194
+182,"please clean screenshots folder",trash_screenshots,trash_screenshots,true,0.0236
+183,"delete my screenshots",trash_screenshots,trash_screenshots,true,0.0200
+184,"please delete my screenshots",trash_screenshots,trash_screenshots,true,0.0256
+185,"clean up my saved screenshots",trash_screenshots,trash_screenshots,true,0.0230
+186,"please clean up my saved screenshots",trash_screenshots,trash_screenshots,true,0.0280
+187,"trash recent screenshots",trash_screenshots,trash_screenshots,true,0.0211
+188,"please trash recent screenshots",trash_screenshots,trash_screenshots,true,0.0257
+189,"delete screenshots from desktop",trash_screenshots,trash_screenshots,true,0.0262
+190,"please delete screenshots from desktop",trash_screenshots,trash_screenshots,true,0.0318
+191,"clean saved screenshots",trash_screenshots,trash_screenshots,true,0.0195
+192,"please clean saved screenshots",trash_screenshots,trash_screenshots,true,0.0240
+193,"open Safari",open_app,open_app,true,0.0267
+194,"launch Safari",open_app,open_app,true,0.0167
+195,"please open Safari",open_app,none,false,0.0238
+196,"open Visual Studio Code",open_app,open_app,true,0.0257
+197,"launch Visual Studio Code",open_app,open_app,true,0.0270
+198,"please open Visual Studio Code",open_app,none,false,0.0345
+199,"open Code",open_app,open_app,true,0.0103
+200,"launch Code",open_app,open_app,true,0.0113
+201,"please open Code",open_app,none,false,0.0176
+202,"open Mail",open_app,open_app,true,0.0100
+203,"launch Mail",open_app,open_app,true,0.0112
+204,"please open Mail",open_app,none,false,0.0174
+205,"open Spotify",open_app,open_app,true,0.0184
+206,"launch Spotify",open_app,open_app,true,0.0136
+207,"please open Spotify",open_app,none,false,0.0208
+208,"open Terminal",open_app,open_app,true,0.0130
+209,"launch Terminal",open_app,open_app,true,0.0142
+210,"please open Terminal",open_app,none,false,0.0215
+211,"open Notes",open_app,open_app,true,0.0105
+212,"launch Notes",open_app,open_app,true,0.0120
+213,"please open Notes",open_app,none,false,0.0186
+214,"open Calendar",open_app,open_app,true,0.0128
+215,"launch Calendar",open_app,open_app,true,0.0141
+216,"please open Calendar",open_app,none,false,0.0212
+217,"open Finder",open_app,open_app,true,0.0112
+218,"launch Finder",open_app,open_app,true,0.0130
+219,"please open Finder",open_app,none,false,0.0196
+220,"open System Settings",open_app,open_app,true,0.0197
+221,"launch System Settings",open_app,open_app,true,0.0207
+222,"please open System Settings",open_app,none,false,0.0267
+223,"open Calculator",open_app,open_app,true,0.0142
+224,"launch Calculator",open_app,open_app,true,0.0173
+225,"please open Calculator",open_app,none,false,0.0226
+226,"open Music",open_app,open_app,true,0.0105
+227,"launch Music",open_app,open_app,true,0.0121
+228,"please open Music",open_app,none,false,0.0188
+229,"open Photos",open_app,open_app,true,0.0112
+230,"launch Photos",open_app,open_app,true,0.0126
+231,"please open Photos",open_app,none,false,0.0193
+232,"open Messages",open_app,open_app,true,0.0125
+233,"launch Messages",open_app,open_app,true,0.0141
+234,"please open Messages",open_app,none,false,0.0208
+235,"open FaceTime",open_app,open_app,true,0.0126
+236,"launch FaceTime",open_app,open_app,true,0.0141
+237,"please open FaceTime",open_app,none,false,0.0211
+238,"open Maps",open_app,open_app,true,0.0097
+239,"launch Maps",open_app,open_app,true,0.0111
+240,"please open Maps",open_app,none,false,0.0177
+241,"open Podcasts",open_app,open_app,true,0.0126
+242,"launch Podcasts",open_app,open_app,true,0.0142
+243,"please open Podcasts",open_app,none,false,0.0217
+244,"open Books",open_app,open_app,true,0.0103
+245,"launch Books",open_app,open_app,true,0.0119
+246,"please open Books",open_app,none,false,0.0182
+247,"close Safari",close_app,close_app,true,0.0123
+248,"quit Safari",close_app,close_app,true,0.0114
+249,"close Visual Studio Code",close_app,close_app,true,0.0221
+250,"quit Visual Studio Code",close_app,close_app,true,0.0209
+251,"close Code",close_app,close_app,true,0.0107
+252,"quit Code",close_app,close_app,true,0.0098
+253,"close Mail",close_app,close_app,true,0.0105
+254,"quit Mail",close_app,close_app,true,0.0098
+255,"close Spotify",close_app,close_app,true,0.0127
+256,"quit Spotify",close_app,close_app,true,0.0120
+257,"close Terminal",close_app,close_app,true,0.0135
+258,"quit Terminal",close_app,close_app,true,0.0127
+259,"close Notes",close_app,close_app,true,0.0112
+260,"quit Notes",close_app,close_app,true,0.0104
+261,"close Calendar",close_app,close_app,true,0.0135
+262,"quit Calendar",close_app,close_app,true,0.0126
+263,"close Finder",close_app,close_app,true,0.0119
+264,"quit Finder",close_app,close_app,true,0.0112
+265,"close System Settings",close_app,close_app,true,0.0200
+266,"quit System Settings",close_app,close_app,true,0.0192
+267,"close Calculator",close_app,close_app,true,0.0161
+268,"quit Calculator",close_app,close_app,true,0.0142
+269,"close Music",close_app,close_app,true,0.0113
+270,"quit Music",close_app,close_app,true,0.0104
+271,"git status",git,git,true,0.0112
+272,"pearl git status",git,git,true,0.0170
+273,"show git status",git,git,true,0.0149
+274,"pearl show git status",git,git,true,0.0201
+275,"check git status",git,git,true,0.0169
+276,"pearl check git status",git,git,true,0.0212
+277,"is my working tree clean",git,git,true,0.0268
+278,"pearl is my working tree clean",git,git,true,0.0312
+279,"git branch status",git,git,true,0.0182
+280,"pearl git branch status",git,git,true,0.0226
+281,"check repo status",git,git,true,0.0198
+282,"pearl check repo status",git,git,true,0.0245
+283,"git working tree",git,git,true,0.0183
+284,"pearl git working tree",git,git,true,0.0227
+285,"git status please",git,git,true,0.0175
+286,"pearl git status please",git,git,true,0.0215
+287,"remind me to buy milk",reminder,reminder,true,0.0238
+288,"create reminder buy milk",reminder,reminder,true,0.0256
+289,"remind me to call Mom",reminder,reminder,true,0.0231
+290,"create reminder call Mom",reminder,reminder,true,0.0250
+291,"remind me to review pull request",reminder,reminder,true,0.0327
+292,"create reminder review pull request",reminder,reminder,true,0.0348
+293,"remind me to attend team standup",reminder,reminder,true,0.0329
+294,"create reminder attend team standup",reminder,reminder,true,0.0343
+295,"remind me to submit tax documents",reminder,reminder,true,0.0336
+296,"create reminder submit tax documents",reminder,reminder,true,0.0356
+297,"remind me to fix bug in router",reminder,reminder,true,0.0311
+298,"create reminder fix bug in router",reminder,reminder,true,0.0330
+299,"remind me to walk the dog",reminder,reminder,true,0.0265
+300,"create reminder walk the dog",reminder,reminder,true,0.0295
+301,"remind me to order groceries",reminder,reminder,true,0.0300
+302,"create reminder order groceries",reminder,reminder,true,0.0312
+303,"remind me to read chapter 4",reminder,reminder,true,0.0280
+304,"create reminder read chapter 4",reminder,reminder,true,0.0309
+305,"remind me to schedule dentist appointment",reminder,reminder,true,0.0393
+306,"create reminder schedule dentist appointment",reminder,reminder,true,0.0415
+307,"undo",undo,undo,true,0.0034
+308,"undo that",undo,undo,true,0.0045
+309,"revert that",undo,undo,true,0.0047
+310,"please undo",undo,none,false,0.0119
+311,"pearl undo",undo,none,false,0.0110
+312,"don't mute volume",none,none,true,0.0007
+313,"pearl don't mute volume",none,none,true,0.0016
+314,"do not mute volume",none,none,true,0.0027
+315,"pearl do not mute volume",none,none,true,0.0043
+316,"dont set volume to 0",none,none,true,0.0017
+317,"pearl dont set volume to 0",none,none,true,0.0027
+318,"don't open Safari",none,none,true,0.0005
+319,"pearl don't open Safari",none,none,true,0.0013
+320,"do not launch Code",none,none,true,0.0025
+321,"pearl do not launch Code",none,none,true,0.0041
+322,"never mind",none,none,true,0.0024
+323,"pearl never mind",none,none,true,0.0177
+324,"cancel that",none,none,true,0.0030
+325,"pearl cancel that",none,none,true,0.0189
+326,"don't take screenshot",none,none,true,0.0005
+327,"pearl don't take screenshot",none,none,true,0.0014
+328,"do not delete screenshots",none,none,true,0.0032
+329,"pearl do not delete screenshots",none,none,true,0.0048
+330,"abort",none,none,true,0.0025
+331,"pearl abort",none,none,true,0.0121
+332,"ignore that",none,none,true,0.0040
+333,"pearl ignore that",none,none,true,0.0182
+334,"don't remind me",none,none,true,0.0005
+335,"pearl don't remind me",none,none,true,0.0014
+336,"dont close mail",none,none,true,0.0013
+337,"pearl dont close mail",none,none,true,0.0025
+338,"do not quit spotify",none,none,true,0.0027
+339,"pearl do not quit spotify",none,none,true,0.0043
+340,"don't check git status",none,none,true,0.0005
+341,"pearl don't check git status",none,none,true,0.0014
+342,"what is quantum computing",none,none,true,0.0259
+343,"who was Albert Einstein",none,none,true,0.0240
+344,"write a poem about macOS",none,none,true,0.0252
+345,"explain how neural engines work",none,none,true,0.0298
+346,"what is the weather in Tokyo",none,none,true,0.0276
+347,"tell me a joke",none,none,true,0.0148
+348,"summarize the history of Rome",none,none,true,0.0281
+349,"how do airplanes fly",none,none,true,0.0214
+350,"what is 17 times 24",none,none,true,0.0209
+351,"translate thank you to Japanese",none,none,true,0.0298
+352,"can you please set volume to 0",volume,volume,true,0.0345
+353,"could you set volume to 0",volume,volume,true,0.0306
+354,"would you please set volume to 0",volume,volume,true,0.0307
+355,"hey pearl set volume to 0",volume,volume,true,0.0273
+356,"yo pearl set volume to 0",volume,volume,true,0.0259
+357,"can you please volume 0",volume,volume,true,0.0253
+358,"could you volume 0",volume,volume,true,0.0285
+359,"would you please volume 0",volume,volume,true,0.0264
+360,"hey pearl volume 0",volume,volume,true,0.0226
+361,"yo pearl volume 0",volume,volume,true,0.0226
+362,"can you please set volume to 2",volume,volume,true,0.0288
+363,"could you set volume to 2",volume,volume,true,0.0268
+364,"would you please set volume to 2",volume,volume,true,0.0295
+365,"hey pearl set volume to 2",volume,volume,true,0.0262
+366,"yo pearl set volume to 2",volume,volume,true,0.0257
+367,"can you please volume 2",volume,volume,true,0.0252
+368,"could you volume 2",volume,volume,true,0.0228
+369,"would you please volume 2",volume,volume,true,0.0261
+370,"hey pearl volume 2",volume,volume,true,0.0226
+371,"yo pearl volume 2",volume,volume,true,0.0227
+372,"can you please set volume to 4",volume,volume,true,0.0288
+373,"could you set volume to 4",volume,volume,true,0.0260
+374,"would you please set volume to 4",volume,volume,true,0.0295
+375,"hey pearl set volume to 4",volume,volume,true,0.0263
+376,"yo pearl set volume to 4",volume,volume,true,0.0289
+377,"can you please volume 4",volume,volume,true,0.0311
+378,"could you volume 4",volume,volume,true,0.0226
+379,"would you please volume 4",volume,volume,true,0.0316
+380,"hey pearl volume 4",volume,volume,true,0.0226
+381,"yo pearl volume 4",volume,volume,true,0.0225
+382,"can you please set volume to 6",volume,volume,true,0.0288
+383,"could you set volume to 6",volume,volume,true,0.0262
+384,"would you please set volume to 6",volume,volume,true,0.0297
+385,"hey pearl set volume to 6",volume,volume,true,0.0286
+386,"yo pearl set volume to 6",volume,volume,true,0.0257
+387,"can you please volume 6",volume,volume,true,0.0263
+388,"could you volume 6",volume,volume,true,0.0225
+389,"would you please volume 6",volume,volume,true,0.0261
+390,"hey pearl volume 6",volume,volume,true,0.0225
+391,"yo pearl volume 6",volume,volume,true,0.0219
+392,"can you please set volume to 8",volume,volume,true,0.0290
+393,"could you set volume to 8",volume,volume,true,0.0262
+394,"would you please set volume to 8",volume,volume,true,0.0385
+395,"hey pearl set volume to 8",volume,volume,true,0.0260
+396,"yo pearl set volume to 8",volume,volume,true,0.0286
+397,"can you please volume 8",volume,volume,true,0.0253
+398,"could you volume 8",volume,volume,true,0.0225
+399,"would you please volume 8",volume,volume,true,0.0260
+400,"hey pearl volume 8",volume,volume,true,0.0221
+401,"yo pearl volume 8",volume,volume,true,0.0220
+402,"can you please set volume to 10",volume,volume,true,0.0293
+403,"could you set volume to 10",volume,volume,true,0.0271
+404,"would you please set volume to 10",volume,volume,true,0.0309
+405,"hey pearl set volume to 10",volume,volume,true,0.0290
+406,"yo pearl set volume to 10",volume,volume,true,0.0261
+407,"can you please volume 10",volume,volume,true,0.0257
+408,"could you volume 10",volume,volume,true,0.0229
+409,"would you please volume 10",volume,volume,true,0.0284
+410,"hey pearl volume 10",volume,volume,true,0.0229
+411,"yo pearl volume 10",volume,volume,true,0.0227
+412,"can you please set volume to 12",volume,volume,true,0.0289
+413,"could you set volume to 12",volume,volume,true,0.0330
+414,"would you please set volume to 12",volume,volume,true,0.0308
+415,"hey pearl set volume to 12",volume,volume,true,0.0265
+416,"yo pearl set volume to 12",volume,volume,true,0.0260
+417,"can you please volume 12",volume,volume,true,0.0283
+418,"could you volume 12",volume,volume,true,0.0256
+419,"would you please volume 12",volume,volume,true,0.0273
+420,"hey pearl volume 12",volume,volume,true,0.0226
+421,"yo pearl volume 12",volume,volume,true,0.0221
+422,"can you please set volume to 14",volume,volume,true,0.0288
+423,"could you set volume to 14",volume,volume,true,0.0264
+424,"would you please set volume to 14",volume,volume,true,0.0300
+425,"hey pearl set volume to 14",volume,volume,true,0.0263
+426,"yo pearl set volume to 14",volume,volume,true,0.0260
+427,"can you please volume 14",volume,volume,true,0.0255
+428,"could you volume 14",volume,volume,true,0.0226
+429,"would you please volume 14",volume,volume,true,0.0262
+430,"hey pearl volume 14",volume,volume,true,0.0223
+431,"yo pearl volume 14",volume,volume,true,0.0222
+432,"can you please set volume to 16",volume,volume,true,0.0290
+433,"could you set volume to 16",volume,volume,true,0.0265
+434,"would you please set volume to 16",volume,volume,true,0.0300
+435,"hey pearl set volume to 16",volume,volume,true,0.0264
+436,"yo pearl set volume to 16",volume,volume,true,0.0259
+437,"can you please volume 16",volume,volume,true,0.0254
+438,"could you volume 16",volume,volume,true,0.0229
+439,"would you please volume 16",volume,volume,true,0.0263
+440,"hey pearl volume 16",volume,volume,true,0.0227
+441,"yo pearl volume 16",volume,volume,true,0.0295
+442,"can you please set volume to 18",volume,volume,true,0.0314
+443,"could you set volume to 18",volume,volume,true,0.0264
+444,"would you please set volume to 18",volume,volume,true,0.0302
+445,"hey pearl set volume to 18",volume,volume,true,0.0264
+446,"yo pearl set volume to 18",volume,volume,true,0.0262
+447,"can you please volume 18",volume,volume,true,0.0255
+448,"could you volume 18",volume,volume,true,0.0231
+449,"would you please volume 18",volume,volume,true,0.0295
+450,"hey pearl volume 18",volume,volume,true,0.0230
+451,"yo pearl volume 18",volume,volume,true,0.0233
+452,"can you please set volume to 20",volume,volume,true,0.0292
+453,"could you set volume to 20",volume,volume,true,0.0294
+454,"would you please set volume to 20",volume,volume,true,0.0309
+455,"hey pearl set volume to 20",volume,volume,true,0.0271
+456,"yo pearl set volume to 20",volume,volume,true,0.0263
+457,"can you please volume 20",volume,volume,true,0.0259
+458,"could you volume 20",volume,volume,true,0.0229
+459,"would you please volume 20",volume,volume,true,0.0264
+460,"hey pearl volume 20",volume,volume,true,0.0262
+461,"yo pearl volume 20",volume,volume,true,0.0227
+462,"can you please set volume to 22",volume,volume,true,0.0292
+463,"could you set volume to 22",volume,volume,true,0.0266
+464,"would you please set volume to 22",volume,volume,true,0.0302
+465,"hey pearl set volume to 22",volume,volume,true,0.0262
+466,"yo pearl set volume to 22",volume,volume,true,0.0260
+467,"can you please volume 22",volume,volume,true,0.0256
+468,"could you volume 22",volume,volume,true,0.0226
+469,"would you please volume 22",volume,volume,true,0.0265
+470,"hey pearl volume 22",volume,volume,true,0.0201
+471,"yo pearl volume 22",volume,volume,true,0.0198
+472,"can you please set volume to 24",volume,volume,true,0.0257
+473,"could you set volume to 24",volume,volume,true,0.0232
+474,"would you please set volume to 24",volume,volume,true,0.0266
+475,"hey pearl set volume to 24",volume,volume,true,0.0232
+476,"yo pearl set volume to 24",volume,volume,true,0.0230
+477,"can you please volume 24",volume,volume,true,0.0224
+478,"could you volume 24",volume,volume,true,0.0227
+479,"would you please volume 24",volume,volume,true,0.0233
+480,"hey pearl volume 24",volume,volume,true,0.0200
+481,"yo pearl volume 24",volume,volume,true,0.0219
+482,"can you please set volume to 26",volume,volume,true,0.0260
+483,"could you set volume to 26",volume,volume,true,0.0240
+484,"would you please set volume to 26",volume,volume,true,0.0347
+485,"hey pearl set volume to 26",volume,volume,true,0.0235
+486,"yo pearl set volume to 26",volume,volume,true,0.0230
+487,"can you please volume 26",volume,volume,true,0.0223
+488,"could you volume 26",volume,volume,true,0.0205
+489,"would you please volume 26",volume,volume,true,0.0232
+490,"hey pearl volume 26",volume,volume,true,0.0201
+491,"yo pearl volume 26",volume,volume,true,0.0196
+492,"can you please set volume to 28",volume,volume,true,0.0255
+493,"could you set volume to 28",volume,volume,true,0.0232
+494,"would you please set volume to 28",volume,volume,true,0.0267
+495,"hey pearl set volume to 28",volume,volume,true,0.0234
+496,"yo pearl set volume to 28",volume,volume,true,0.0231
+497,"can you please volume 28",volume,volume,true,0.0224
+498,"could you volume 28",volume,volume,true,0.0201
+499,"would you please volume 28",volume,volume,true,0.0233
+500,"hey pearl volume 28",volume,volume,true,0.0202
+501,"yo pearl volume 28",volume,volume,true,0.0197
+502,"can you please set volume to 30",volume,volume,true,0.0283
+503,"could you set volume to 30",volume,volume,true,0.0236
+504,"would you please set volume to 30",volume,volume,true,0.0266
+505,"hey pearl set volume to 30",volume,volume,true,0.0262
+506,"yo pearl set volume to 30",volume,volume,true,0.0230
+507,"can you please volume 30",volume,volume,true,0.0256
+508,"could you volume 30",volume,volume,true,0.0205
+509,"would you please volume 30",volume,volume,true,0.0232
+510,"hey pearl volume 30",volume,volume,true,0.0202
+511,"yo pearl volume 30",volume,volume,true,0.0221
+512,"can you please set volume to 32",volume,volume,true,0.0258
+513,"could you set volume to 32",volume,volume,true,0.0257
+514,"would you please set volume to 32",volume,volume,true,0.0267
+515,"hey pearl set volume to 32",volume,volume,true,0.0234
+516,"yo pearl set volume to 32",volume,volume,true,0.0259
+517,"can you please volume 32",volume,volume,true,0.0227
+518,"could you volume 32",volume,volume,true,0.0202
+519,"would you please volume 32",volume,volume,true,0.0232
+520,"hey pearl volume 32",volume,volume,true,0.0200
+521,"yo pearl volume 32",volume,volume,true,0.0198
+522,"can you please set volume to 34",volume,volume,true,0.0257
+523,"could you set volume to 34",volume,volume,true,0.0239
+524,"would you please set volume to 34",volume,volume,true,0.0269
+525,"hey pearl set volume to 34",volume,volume,true,0.0235
+526,"yo pearl set volume to 34",volume,volume,true,0.0233
+527,"can you please volume 34",volume,volume,true,0.0223
+528,"could you volume 34",volume,volume,true,0.0201
+529,"would you please volume 34",volume,volume,true,0.0278
+530,"hey pearl volume 34",volume,volume,true,0.0226
+531,"yo pearl volume 34",volume,volume,true,0.0207
+532,"can you please set volume to 36",volume,volume,true,0.0256
+533,"could you set volume to 36",volume,volume,true,0.0283
+534,"would you please set volume to 36",volume,volume,true,0.0294
+535,"hey pearl set volume to 36",volume,volume,true,0.0238
+536,"yo pearl set volume to 36",volume,volume,true,0.0228
+537,"can you please volume 36",volume,volume,true,0.0222
+538,"could you volume 36",volume,volume,true,0.0201
+539,"would you please volume 36",volume,volume,true,0.0232
+540,"hey pearl volume 36",volume,volume,true,0.1035
+541,"yo pearl volume 36",volume,volume,true,0.0338
+542,"can you please set volume to 38",volume,volume,true,0.0361
+543,"could you set volume to 38",volume,volume,true,0.0533
+544,"would you please set volume to 38",volume,volume,true,0.0323
+545,"hey pearl set volume to 38",volume,volume,true,0.0275
+546,"yo pearl set volume to 38",volume,volume,true,0.0235
+547,"can you please volume 38",volume,volume,true,0.0227
+548,"could you volume 38",volume,volume,true,0.0201
+549,"would you please volume 38",volume,volume,true,0.0226
+550,"hey pearl volume 38",volume,volume,true,0.0197
+551,"yo pearl volume 38",volume,volume,true,0.0225
+552,"can you please set volume to 40",volume,volume,true,0.0252
+553,"could you set volume to 40",volume,volume,true,0.0537
+554,"would you please set volume to 40",volume,volume,true,0.0279
+555,"hey pearl set volume to 40",volume,volume,true,0.0246
+556,"yo pearl set volume to 40",volume,volume,true,0.0239
+557,"can you please volume 40",volume,volume,true,0.0230
+558,"could you volume 40",volume,volume,true,0.0209
+559,"would you please volume 40",volume,volume,true,0.0239
+560,"hey pearl volume 40",volume,volume,true,0.0203
+561,"yo pearl volume 40",volume,volume,true,0.0204
+562,"can you please set volume to 42",volume,volume,true,0.0327
+563,"could you set volume to 42",volume,volume,true,0.0243
+564,"would you please set volume to 42",volume,volume,true,0.0271
+565,"hey pearl set volume to 42",volume,volume,true,0.0239
+566,"yo pearl set volume to 42",volume,volume,true,0.0237
+567,"can you please volume 42",volume,volume,true,0.0230
+568,"could you volume 42",volume,volume,true,0.0209
+569,"would you please volume 42",volume,volume,true,0.0266
+570,"hey pearl volume 42",volume,volume,true,0.0207
+571,"yo pearl volume 42",volume,volume,true,0.0202
+572,"can you please set volume to 44",volume,volume,true,0.0266
+573,"could you set volume to 44",volume,volume,true,0.0238
+574,"would you please set volume to 44",volume,volume,true,0.0279
+575,"hey pearl set volume to 44",volume,volume,true,0.0237
+576,"yo pearl set volume to 44",volume,volume,true,0.0235
+577,"can you please volume 44",volume,volume,true,0.0256
+578,"could you volume 44",volume,volume,true,0.0207
+579,"would you please volume 44",volume,volume,true,0.0240
+580,"hey pearl volume 44",volume,volume,true,0.0207
+581,"yo pearl volume 44",volume,volume,true,0.0202
+582,"can you please set volume to 46",volume,volume,true,0.0261
+583,"could you set volume to 46",volume,volume,true,0.0238
+584,"would you please set volume to 46",volume,volume,true,0.0326
+585,"hey pearl set volume to 46",volume,volume,true,0.0240
+586,"yo pearl set volume to 46",volume,volume,true,0.0261
+587,"can you please volume 46",volume,volume,true,0.0231
+588,"could you volume 46",volume,volume,true,0.0208
+589,"would you please volume 46",volume,volume,true,0.0240
+590,"hey pearl volume 46",volume,volume,true,0.0204
+591,"yo pearl volume 46",volume,volume,true,0.0203
+592,"can you please set volume to 48",volume,volume,true,0.0264
+593,"could you set volume to 48",volume,volume,true,0.0240
+594,"would you please set volume to 48",volume,volume,true,0.0270
+595,"hey pearl set volume to 48",volume,volume,true,0.0240
+596,"yo pearl set volume to 48",volume,volume,true,0.0234
+597,"can you please volume 48",volume,volume,true,0.0226
+598,"could you volume 48",volume,volume,true,0.0204
+599,"would you please volume 48",volume,volume,true,0.0233
+600,"hey pearl volume 48",volume,volume,true,0.0205
+601,"yo pearl volume 48",volume,volume,true,0.0201
+602,"can you please set volume to 50",volume,volume,true,0.0262
+603,"could you set volume to 50",volume,volume,true,0.0240
+604,"would you please set volume to 50",volume,volume,true,0.0271
+605,"hey pearl set volume to 50",volume,volume,true,0.0236
+606,"yo pearl set volume to 50",volume,volume,true,0.0236
+607,"can you please volume 50",volume,volume,true,0.0230
+608,"could you volume 50",volume,volume,true,0.0208
+609,"would you please volume 50",volume,volume,true,0.0357
+610,"hey pearl volume 50",volume,volume,true,0.0207
+611,"yo pearl volume 50",volume,volume,true,0.0204
+612,"can you please set volume to 52",volume,volume,true,0.0354
+613,"could you set volume to 52",volume,volume,true,0.0270
+614,"would you please set volume to 52",volume,volume,true,0.0272
+615,"hey pearl set volume to 52",volume,volume,true,0.0261
+616,"yo pearl set volume to 52",volume,volume,true,0.0236
+617,"can you please volume 52",volume,volume,true,0.0229
+618,"could you volume 52",volume,volume,true,0.0206
+619,"would you please volume 52",volume,volume,true,0.0237
+620,"hey pearl volume 52",volume,volume,true,0.0204
+621,"yo pearl volume 52",volume,volume,true,0.0201
+622,"can you please set volume to 54",volume,volume,true,0.0310
+623,"could you set volume to 54",volume,volume,true,0.0333
+624,"would you please set volume to 54",volume,volume,true,0.0291
+625,"hey pearl set volume to 54",volume,volume,true,0.0241
+626,"yo pearl set volume to 54",volume,volume,true,0.0236
+627,"can you please volume 54",volume,volume,true,0.0232
+628,"could you volume 54",volume,volume,true,0.0231
+629,"would you please volume 54",volume,volume,true,0.0238
+630,"hey pearl volume 54",volume,volume,true,0.0206
+631,"yo pearl volume 54",volume,volume,true,0.0204
+632,"can you please set volume to 56",volume,volume,true,0.0263
+633,"could you set volume to 56",volume,volume,true,0.0264
+634,"would you please set volume to 56",volume,volume,true,0.0273
+635,"hey pearl set volume to 56",volume,volume,true,0.0380
+636,"yo pearl set volume to 56",volume,volume,true,0.0239
+637,"can you please volume 56",volume,volume,true,0.0234
+638,"could you volume 56",volume,volume,true,0.0207
+639,"would you please volume 56",volume,volume,true,0.0240
+640,"hey pearl volume 56",volume,volume,true,0.0206
+641,"yo pearl volume 56",volume,volume,true,0.0230
+642,"can you please set volume to 58",volume,volume,true,0.0267
+643,"could you set volume to 58",volume,volume,true,0.0241
+644,"would you please set volume to 58",volume,volume,true,0.0274
+645,"hey pearl set volume to 58",volume,volume,true,0.0234
+646,"yo pearl set volume to 58",volume,volume,true,0.0233
+647,"can you please volume 58",volume,volume,true,0.0229
+648,"could you volume 58",volume,volume,true,0.0206
+649,"would you please volume 58",volume,volume,true,0.0235
+650,"hey pearl volume 58",volume,volume,true,0.0204
+651,"yo pearl volume 58",volume,volume,true,0.0202
+652,"can you please set volume to 60",volume,volume,true,0.0260
+653,"could you set volume to 60",volume,volume,true,0.0239
+654,"would you please set volume to 60",volume,volume,true,0.0268
+655,"hey pearl set volume to 60",volume,volume,true,0.0238
+656,"yo pearl set volume to 60",volume,volume,true,0.0233
+657,"can you please volume 60",volume,volume,true,0.0227
+658,"could you volume 60",volume,volume,true,0.0204
+659,"would you please volume 60",volume,volume,true,0.0241
+660,"hey pearl volume 60",volume,volume,true,0.0205
+661,"yo pearl volume 60",volume,volume,true,0.0202
+662,"can you please set volume to 62",volume,volume,true,0.0259
+663,"could you set volume to 62",volume,volume,true,0.0238
+664,"would you please set volume to 62",volume,volume,true,0.0295
+665,"hey pearl set volume to 62",volume,volume,true,0.0238
+666,"yo pearl set volume to 62",volume,volume,true,0.0235
+667,"can you please volume 62",volume,volume,true,0.0230
+668,"could you volume 62",volume,volume,true,0.0206
+669,"would you please volume 62",volume,volume,true,0.0236
+670,"hey pearl volume 62",volume,volume,true,0.0230
+671,"yo pearl volume 62",volume,volume,true,0.0202
+672,"can you please set volume to 64",volume,volume,true,0.0262
+673,"could you set volume to 64",volume,volume,true,0.0290
+674,"would you please set volume to 64",volume,volume,true,0.0275
+675,"hey pearl set volume to 64",volume,volume,true,0.0238
+676,"yo pearl set volume to 64",volume,volume,true,0.0234
+677,"can you please volume 64",volume,volume,true,0.0229
+678,"could you volume 64",volume,volume,true,0.0207
+679,"would you please volume 64",volume,volume,true,0.0237
+680,"hey pearl volume 64",volume,volume,true,0.0203
+681,"yo pearl volume 64",volume,volume,true,0.0199
+682,"can you please set volume to 66",volume,volume,true,0.0261
+683,"could you set volume to 66",volume,volume,true,0.0236
+684,"would you please set volume to 66",volume,volume,true,0.0271
+685,"hey pearl set volume to 66",volume,volume,true,0.0235
+686,"yo pearl set volume to 66",volume,volume,true,0.0234
+687,"can you please volume 66",volume,volume,true,0.0229
+688,"could you volume 66",volume,volume,true,0.0234
+689,"would you please volume 66",volume,volume,true,0.0235
+690,"hey pearl volume 66",volume,volume,true,0.0201
+691,"yo pearl volume 66",volume,volume,true,0.0199
+692,"can you please set volume to 68",volume,volume,true,0.0262
+693,"could you set volume to 68",volume,volume,true,0.0237
+694,"would you please set volume to 68",volume,volume,true,0.0270
+695,"hey pearl set volume to 68",volume,volume,true,0.0236
+696,"yo pearl set volume to 68",volume,volume,true,0.0237
+697,"can you please volume 68",volume,volume,true,0.0250
+698,"could you volume 68",volume,volume,true,0.0186
+699,"would you please volume 68",volume,volume,true,0.0210
+700,"hey pearl volume 68",volume,volume,true,0.0182
+701,"yo pearl volume 68",volume,volume,true,0.0179
+702,"can you please set volume to 70",volume,volume,true,0.0232
+703,"could you set volume to 70",volume,volume,true,0.0211
+704,"would you please set volume to 70",volume,volume,true,0.0243
+705,"hey pearl set volume to 70",volume,volume,true,0.0234
+706,"yo pearl set volume to 70",volume,volume,true,0.0208
+707,"can you please volume 70",volume,volume,true,0.0203
+708,"could you volume 70",volume,volume,true,0.0182
+709,"would you please volume 70",volume,volume,true,0.0260
+710,"hey pearl volume 70",volume,volume,true,0.0187
+711,"yo pearl volume 70",volume,volume,true,0.0185
+712,"can you please set volume to 72",volume,volume,true,0.0258
+713,"could you set volume to 72",volume,volume,true,0.0214
+714,"would you please set volume to 72",volume,volume,true,0.0241
+715,"hey pearl set volume to 72",volume,volume,true,0.0231
+716,"yo pearl set volume to 72",volume,volume,true,0.0211
+717,"can you please volume 72",volume,volume,true,0.0205
+718,"could you volume 72",volume,volume,true,0.0184
+719,"would you please volume 72",volume,volume,true,0.0213
+720,"hey pearl volume 72",volume,volume,true,0.0181
+721,"yo pearl volume 72",volume,volume,true,0.0184
+722,"can you please set volume to 74",volume,volume,true,0.0233
+723,"could you set volume to 74",volume,volume,true,0.0213
+724,"would you please set volume to 74",volume,volume,true,0.0243
+725,"hey pearl set volume to 74",volume,volume,true,0.0210
+726,"yo pearl set volume to 74",volume,volume,true,0.0205
+727,"can you please volume 74",volume,volume,true,0.0203
+728,"could you volume 74",volume,volume,true,0.0181
+729,"would you please volume 74",volume,volume,true,0.0210
+730,"hey pearl volume 74",volume,volume,true,0.0181
+731,"yo pearl volume 74",volume,volume,true,0.0177
+732,"can you please set volume to 76",volume,volume,true,0.0232
+733,"could you set volume to 76",volume,volume,true,0.0211
+734,"would you please set volume to 76",volume,volume,true,0.0238
+735,"hey pearl set volume to 76",volume,volume,true,0.0209
+736,"yo pearl set volume to 76",volume,volume,true,0.0206
+737,"can you please volume 76",volume,volume,true,0.0229
+738,"could you volume 76",volume,volume,true,0.0184
+739,"would you please volume 76",volume,volume,true,0.0210
+740,"hey pearl volume 76",volume,volume,true,0.0182
+741,"yo pearl volume 76",volume,volume,true,0.0179
+742,"can you please set volume to 78",volume,volume,true,0.0234
+743,"could you set volume to 78",volume,volume,true,0.0211
+744,"would you please set volume to 78",volume,volume,true,0.0238
+745,"hey pearl set volume to 78",volume,volume,true,0.0213
+746,"yo pearl set volume to 78",volume,volume,true,0.0209
+747,"can you please volume 78",volume,volume,true,0.0203
+748,"could you volume 78",volume,volume,true,0.0182
+749,"would you please volume 78",volume,volume,true,0.0210
+750,"hey pearl volume 78",volume,volume,true,0.0180
+751,"yo pearl volume 78",volume,volume,true,0.0178
+752,"can you please set volume to 80",volume,volume,true,0.0231
+753,"could you set volume to 80",volume,volume,true,0.0210
+754,"would you please set volume to 80",volume,volume,true,0.0306
+755,"hey pearl set volume to 80",volume,volume,true,0.0222
+756,"yo pearl set volume to 80",volume,volume,true,0.0211
+757,"can you please volume 80",volume,volume,true,0.0207
+758,"could you volume 80",volume,volume,true,0.0182
+759,"would you please volume 80",volume,volume,true,0.0211
+760,"hey pearl volume 80",volume,volume,true,0.0182
+761,"yo pearl volume 80",volume,volume,true,0.0251
+762,"can you please set volume to 82",volume,volume,true,0.0237
+763,"could you set volume to 82",volume,volume,true,0.0232
+764,"would you please set volume to 82",volume,volume,true,0.0244
+765,"hey pearl set volume to 82",volume,volume,true,0.0210
+766,"yo pearl set volume to 82",volume,volume,true,0.0230
+767,"can you please volume 82",volume,volume,true,0.0208
+768,"could you volume 82",volume,volume,true,0.0181
+769,"would you please volume 82",volume,volume,true,0.0235
+770,"hey pearl volume 82",volume,volume,true,0.0207
+771,"yo pearl volume 82",volume,volume,true,0.0182
+772,"can you please set volume to 84",volume,volume,true,0.0256
+773,"could you set volume to 84",volume,volume,true,0.0215
+774,"would you please set volume to 84",volume,volume,true,0.0240
+775,"hey pearl set volume to 84",volume,volume,true,0.0213
+776,"yo pearl set volume to 84",volume,volume,true,0.0229
+777,"can you please volume 84",volume,volume,true,0.0222
+778,"could you volume 84",volume,volume,true,0.0184
+779,"would you please volume 84",volume,volume,true,0.0211
+780,"hey pearl volume 84",volume,volume,true,0.0180
+781,"yo pearl volume 84",volume,volume,true,0.0177
+782,"can you please set volume to 86",volume,volume,true,0.0252
+783,"could you set volume to 86",volume,volume,true,0.0214
+784,"would you please set volume to 86",volume,volume,true,0.0245
+785,"hey pearl set volume to 86",volume,volume,true,0.0212
+786,"yo pearl set volume to 86",volume,volume,true,0.0255
+787,"can you please volume 86",volume,volume,true,0.0206
+788,"could you volume 86",volume,volume,true,0.0181
+789,"would you please volume 86",volume,volume,true,0.0209
+790,"hey pearl volume 86",volume,volume,true,0.0229
+791,"yo pearl volume 86",volume,volume,true,0.0178
+792,"can you please set volume to 88",volume,volume,true,0.0231
+793,"could you set volume to 88",volume,volume,true,0.0212
+794,"would you please set volume to 88",volume,volume,true,0.0237
+795,"hey pearl set volume to 88",volume,volume,true,0.0211
+796,"yo pearl set volume to 88",volume,volume,true,0.0226
+797,"can you please volume 88",volume,volume,true,0.0205
+798,"could you volume 88",volume,volume,true,0.0182
+799,"would you please volume 88",volume,volume,true,0.0210
+800,"hey pearl volume 88",volume,volume,true,0.0183
+801,"yo pearl volume 88",volume,volume,true,0.0202
+802,"can you please set volume to 90",volume,volume,true,0.0235
+803,"could you set volume to 90",volume,volume,true,0.0211
+804,"would you please set volume to 90",volume,volume,true,0.0238
+805,"hey pearl set volume to 90",volume,volume,true,0.0208
+806,"yo pearl set volume to 90",volume,volume,true,0.0207
+807,"can you please volume 90",volume,volume,true,0.0204
+808,"could you volume 90",volume,volume,true,0.0180
+809,"would you please volume 90",volume,volume,true,0.0209
+810,"hey pearl volume 90",volume,volume,true,0.0182
+811,"yo pearl volume 90",volume,volume,true,0.0179
+812,"can you please set volume to 92",volume,volume,true,0.0231
+813,"could you set volume to 92",volume,volume,true,0.0211
+814,"would you please set volume to 92",volume,volume,true,0.0240
+815,"hey pearl set volume to 92",volume,volume,true,0.0215
+816,"yo pearl set volume to 92",volume,volume,true,0.0210
+817,"can you please volume 92",volume,volume,true,0.0222
+818,"could you volume 92",volume,volume,true,0.0185
+819,"would you please volume 92",volume,volume,true,0.0208
+820,"hey pearl volume 92",volume,volume,true,0.0182
+821,"yo pearl volume 92",volume,volume,true,0.0180
+822,"can you please set volume to 94",volume,volume,true,0.0234
+823,"could you set volume to 94",volume,volume,true,0.0211
+824,"would you please set volume to 94",volume,volume,true,0.0238
+825,"hey pearl set volume to 94",volume,volume,true,0.0236
+826,"yo pearl set volume to 94",volume,volume,true,0.0209
+827,"can you please volume 94",volume,volume,true,0.0203
+828,"could you volume 94",volume,volume,true,0.0183
+829,"would you please volume 94",volume,volume,true,0.0209
+830,"hey pearl volume 94",volume,volume,true,0.0180
+831,"yo pearl volume 94",volume,volume,true,0.0176
+832,"can you please set volume to 96",volume,volume,true,0.0232
+833,"could you set volume to 96",volume,volume,true,0.0235
+834,"would you please set volume to 96",volume,volume,true,0.0264
+835,"hey pearl set volume to 96",volume,volume,true,0.0211
+836,"yo pearl set volume to 96",volume,volume,true,0.0208
+837,"can you please volume 96",volume,volume,true,0.0203
+838,"could you volume 96",volume,volume,true,0.0203
+839,"would you please volume 96",volume,volume,true,0.0210
+840,"hey pearl volume 96",volume,volume,true,0.0181
+841,"yo pearl volume 96",volume,volume,true,0.0180
+842,"can you please set volume to 98",volume,volume,true,0.0234
+843,"could you set volume to 98",volume,volume,true,0.0258
+844,"would you please set volume to 98",volume,volume,true,0.0240
+845,"hey pearl set volume to 98",volume,volume,true,0.0209
+846,"yo pearl set volume to 98",volume,volume,true,0.0208
+847,"can you please volume 98",volume,volume,true,0.0204
+848,"could you volume 98",volume,volume,true,0.0181
+849,"would you please volume 98",volume,volume,true,0.0209
+850,"hey pearl volume 98",volume,volume,true,0.0178
+851,"yo pearl volume 98",volume,volume,true,0.0177

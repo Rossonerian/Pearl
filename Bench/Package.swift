@@ -12,7 +12,9 @@ let package = Package(
         .executable(name: "swift_router_bench", targets: ["SwiftRouterBenchmark"]),
         .executable(name: "baseline_v1", targets: ["BaselineV1"]),
         .executable(name: "spike1_apple_fm", targets: ["Spike1_AppleFM"]),
-        .executable(name: "m1_verification", targets: ["M1Verification"])
+        .executable(name: "m1_verification", targets: ["M1Verification"]),
+        .executable(name: "router_eval", targets: ["RouterEvaluation"]),
+        .executable(name: "action_bench", targets: ["ActionBenchmark"])
     ],
     dependencies: [
         .package(path: "..")
@@ -49,6 +51,23 @@ let package = Package(
                 .product(name: "PearlCore", package: "Pearl")
             ],
             path: "Sources/M1Verification"
+        ),
+        .executableTarget(
+            name: "RouterEvaluation",
+            dependencies: [
+                "BenchCore",
+                .product(name: "PearlCore", package: "Pearl")
+            ],
+            path: "Sources/RouterEvaluation"
+        ),
+        .executableTarget(
+            name: "ActionBenchmark",
+            dependencies: [
+                "BenchCore",
+                .product(name: "PearlCore", package: "Pearl"),
+                .product(name: "PearlTools", package: "Pearl")
+            ],
+            path: "Sources/ActionBenchmark"
         )
     ]
 )

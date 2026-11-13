@@ -9,21 +9,27 @@ let package = Package(
     products: [
         .executable(name: "Pearl", targets: ["PearlApp"]),
         .executable(name: "pearl-cli", targets: ["PearlCLI"]),
-        .library(name: "PearlCore", targets: ["PearlCore"])
+        .library(name: "PearlCore", targets: ["PearlCore"]),
+        .library(name: "PearlTools", targets: ["PearlTools"])
     ],
     targets: [
         .target(
             name: "PearlCore",
             path: "Sources/PearlCore"
         ),
+        .target(
+            name: "PearlTools",
+            dependencies: ["PearlCore"],
+            path: "Sources/PearlTools"
+        ),
         .executableTarget(
             name: "PearlApp",
-            dependencies: ["PearlCore"],
+            dependencies: ["PearlCore", "PearlTools"],
             path: "App"
         ),
         .executableTarget(
             name: "PearlCLI",
-            dependencies: ["PearlCore"],
+            dependencies: ["PearlCore", "PearlTools"],
             path: "Sources/pearl-cli"
         )
     ]
