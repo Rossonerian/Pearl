@@ -1,5 +1,6 @@
 import Foundation
 import PearlCore
+import PearlMemory
 
 signal(SIGPIPE, SIG_IGN)
 
@@ -71,18 +72,100 @@ guard !args.isEmpty else {
     print("""
     Pearl CLI (v2.0)
     Usage:
-      pearl ping           Check daemon status & latency
-      pearl status         Show resident memory & active state
-      pearl show           Show floating pill HUD
-      pearl hide           Hide floating pill HUD
-      pearl quit           Terminate Pearl daemon
-      pearl "<command>"    Send query or command to Pearl
+      pearl ping                  Check daemon status & latency
+      pearl status                Show resident memory & active state
+      pearl show                  Show floating pill HUD
+      pearl hide                  Hide floating pill HUD
+      pearl remember <fact>       Explicitly remember a stated fact
+      pearl forget <id>           Forget a fact by its identifier
+      pearl memory [stats|export] Inspect or export long-term memory
+      pearl quit                  Terminate Pearl daemon
+      pearl "<command>"           Send query or command to Pearl
     """)
     exit(0)
 }
 
 let cmd = args[0].lowercased()
 switch cmd {
+case "remember":
+    guard args.count > 1 else {
+        print("Usage: pearl remember <fact text>")
+        exit(1)
+    }
+    let fact = args.dropFirst().joined(separator: " ")
+    let result = sendIPC(command: "remember", args: ["fact": fact])
+    if let resp = result.response {
+        print(resp.message)
+    } else {
+        // Direct fallback if daemon is offline
+        let sema = DispatchSemaphore(value: 0)
+        Task {
+            do {
+                let store = try MemoryStore()
+                let gate = try LearningGate(store: store)
+                let (factId, _) = try await gate.explicitRemember(fact: fact, source: "user", trust: .trusted)
+                print("Remembered (offline store): '\(fact)' (id: \(factId))")
+            } catch {
+                print("Error: \(error.localizedDescription)")
+            }
+            sema.signal()
+        }
+        sema.wait()
+    }
+case "forget":
+    guard args.count > 1 else {
+        print("Usage: pearl forget <id>")
+        exit(1)
+    }
+    let factId = args[1]
+    let result = sendIPC(command: "forget", args: ["id": factId])
+    if let resp = result.response {
+        print(resp.message)
+    } else {
+        let sema = DispatchSemaphore(value: 0)
+        Task {
+            do {
+                let store = try MemoryStore()
+                let gate = try LearningGate(store: store)
+                let removed = try await gate.forget(factId: factId)
+                if removed {
+                    print("Forgot fact \(factId) (offline store)")
+                } else {
+                    print("Fact \(factId) not found in store")
+                }
+            } catch {
+                print("Error: \(error.localizedDescription)")
+            }
+            sema.signal()
+        }
+        sema.wait()
+    }
+case "memory":
+    let sub = args.count > 1 ? args[1].lowercased() : "stats"
+    let result = sendIPC(command: "memory", args: ["subcommand": sub])
+    if let resp = result.response {
+        print(resp.message)
+    } else {
+        let sema = DispatchSemaphore(value: 0)
+        Task {
+            do {
+                let store = try MemoryStore()
+                let gate = try LearningGate(store: store)
+                let viewer = MemoryViewer(store: store, gate: gate)
+                if sub == "export" {
+                    let json = try await viewer.exportJSON()
+                    print(json)
+                } else {
+                    let stats = try await viewer.getStats()
+                    print("Memory Stats: \(stats.factCount) facts, \(stats.profileByteCount) profile bytes (\(stats.profileEstimatedTokens) tokens), \(stats.pendingProposalsCount) pending proposals (Schema v\(stats.schemaVersion))")
+                }
+            } catch {
+                print("Error: \(error.localizedDescription)")
+            }
+            sema.signal()
+        }
+        sema.wait()
+    }
 case "ping":
     let result = sendIPC(command: "ping")
     if let resp = result.response {

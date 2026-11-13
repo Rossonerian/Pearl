@@ -3,6 +3,7 @@ import Foundation
 import PearlCore
 import PearlTools
 import PearlVoice
+import PearlMemory
 
 public final class AppDelegate: NSObject, NSApplicationDelegate {
     private var hudPanel: HUDPanel!
@@ -183,6 +184,82 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                 NSApplication.shared.terminate(nil)
             }
+            
+        case "remember":
+            let factText = req.arguments?["fact"] ?? ""
+            if !factText.isEmpty {
+                let sema = DispatchSemaphore(value: 0)
+                Task {
+                    do {
+                        let store = try MemoryStore()
+                        let gate = try LearningGate(store: store)
+                        let (factId, _) = try await gate.explicitRemember(fact: factText, source: "user", trust: .trusted)
+                        responseMessage = "Remembered: '\(factText)' (id: \(factId))"
+                        responseData["id"] = factId
+                    } catch {
+                        responseMessage = "Failed to remember: \(error.localizedDescription)"
+                        isSuccess = false
+                    }
+                    sema.signal()
+                }
+                sema.wait()
+            } else {
+                responseMessage = "Missing 'fact' argument"
+                isSuccess = false
+            }
+            
+        case "forget":
+            let factId = req.arguments?["id"] ?? ""
+            if !factId.isEmpty {
+                let sema = DispatchSemaphore(value: 0)
+                Task {
+                    do {
+                        let store = try MemoryStore()
+                        let gate = try LearningGate(store: store)
+                        let removed = try await gate.forget(factId: factId)
+                        if removed {
+                            responseMessage = "Forgot fact \(factId)"
+                        } else {
+                            responseMessage = "Fact \(factId) not found"
+                            isSuccess = false
+                        }
+                    } catch {
+                        responseMessage = "Failed to forget: \(error.localizedDescription)"
+                        isSuccess = false
+                    }
+                    sema.signal()
+                }
+                sema.wait()
+            } else {
+                responseMessage = "Missing 'id' argument"
+                isSuccess = false
+            }
+            
+        case "memory":
+            let sub = req.arguments?["subcommand"] ?? "stats"
+            let sema = DispatchSemaphore(value: 0)
+            Task {
+                do {
+                    let store = try MemoryStore()
+                    let gate = try LearningGate(store: store)
+                    let viewer = MemoryViewer(store: store, gate: gate)
+                    if sub == "export" {
+                        let json = try await viewer.exportJSON()
+                        responseMessage = json
+                    } else {
+                        let stats = try await viewer.getStats()
+                        responseMessage = "Memory Stats: \(stats.factCount) facts, \(stats.profileByteCount) profile bytes (\(stats.profileEstimatedTokens) tokens), \(stats.pendingProposalsCount) pending proposals (Schema v\(stats.schemaVersion))"
+                        responseData["fact_count"] = "\(stats.factCount)"
+                        responseData["profile_bytes"] = "\(stats.profileByteCount)"
+                        responseData["schema_version"] = "\(stats.schemaVersion)"
+                    }
+                } catch {
+                    responseMessage = "Memory operation failed: \(error.localizedDescription)"
+                    isSuccess = false
+                }
+                sema.signal()
+            }
+            sema.wait()
             
         default:
             responseMessage = "Unhandled command: \(cmd)"

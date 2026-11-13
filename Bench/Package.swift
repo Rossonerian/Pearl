@@ -16,7 +16,8 @@ let package = Package(
         .executable(name: "router_eval", targets: ["RouterEvaluation"]),
         .executable(name: "action_bench", targets: ["ActionBenchmark"]),
         .executable(name: "voice_e2e", targets: ["VoiceE2E"]),
-        .executable(name: "llm_path", targets: ["LLMPathBenchmark"])
+        .executable(name: "llm_path", targets: ["LLMPathBenchmark"]),
+        .executable(name: "memory_bench", targets: ["MemoryBenchmark"])
     ],
     dependencies: [
         .package(path: "..")
@@ -89,6 +90,15 @@ let package = Package(
                 .product(name: "PearlTools", package: "Pearl")
             ],
             path: "Sources/LLMPathBenchmark"
+        ),
+        .executableTarget(
+            name: "MemoryBenchmark",
+            dependencies: [
+                "BenchCore",
+                .product(name: "PearlCore", package: "Pearl"),
+                .product(name: "PearlMemory", package: "Pearl")
+            ],
+            path: "Sources/MemoryBenchmark"
         )
     ]
 )
