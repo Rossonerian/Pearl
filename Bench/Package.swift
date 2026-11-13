@@ -15,7 +15,8 @@ let package = Package(
         .executable(name: "m1_verification", targets: ["M1Verification"]),
         .executable(name: "router_eval", targets: ["RouterEvaluation"]),
         .executable(name: "action_bench", targets: ["ActionBenchmark"]),
-        .executable(name: "voice_e2e", targets: ["VoiceE2E"])
+        .executable(name: "voice_e2e", targets: ["VoiceE2E"]),
+        .executable(name: "llm_path", targets: ["LLMPathBenchmark"])
     ],
     dependencies: [
         .package(path: "..")
@@ -79,6 +80,15 @@ let package = Package(
                 .product(name: "PearlVoice", package: "Pearl")
             ],
             path: "Sources/VoiceE2E"
+        ),
+        .executableTarget(
+            name: "LLMPathBenchmark",
+            dependencies: [
+                "BenchCore",
+                .product(name: "PearlCore", package: "Pearl"),
+                .product(name: "PearlTools", package: "Pearl")
+            ],
+            path: "Sources/LLMPathBenchmark"
         )
     ]
 )
