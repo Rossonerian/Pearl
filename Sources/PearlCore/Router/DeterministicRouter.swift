@@ -12,6 +12,12 @@ public struct ResolvedIntent: Sendable {
     }
 }
 
+public enum RouterResult: Sendable {
+    case deterministic(intent: ResolvedIntent, badge: HUDTurnBadge)
+    case model(response: ModelResponse, badge: HUDTurnBadge)
+    case cancelled(reason: String)
+}
+
 public final class DeterministicRouter: Sendable {
     public static let shared = DeterministicRouter()
     
@@ -21,6 +27,43 @@ public final class DeterministicRouter: Sendable {
     ]
     
     public init() {}
+    
+    /// Routes utterance through deterministic matcher first; if low-confidence or open-ended,
+    /// falls back to the provided FallbackChain.
+    public func route(
+        utterance: String,
+        fallbackChain: FallbackChain = FallbackChain(),
+        context: ModelExecutionContext = ModelExecutionContext()
+    ) async -> RouterResult {
+        let trimmed = utterance.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            return .cancelled(reason: "Empty utterance.")
+        }
+        let lower = trimmed.lowercased()
+        
+        // 1. Negation Guard: never execute on negated requests
+        for neg in negationPatterns {
+            if lower.hasPrefix(neg) || lower.contains(" " + neg + " ") {
+                return .cancelled(reason: "Negation detected: user aborted or cancelled action.")
+            }
+        }
+        
+        // 2. High-confidence deterministic rule resolution
+        if let intent = resolve(utterance: trimmed) {
+            let badge = HUDTurnBadge(
+                label: "on device",
+                provider: "Deterministic",
+                modelID: "regex",
+                isLocal: true,
+                details: String(format: "confidence: %.2f", intent.confidence)
+            )
+            return .deterministic(intent: intent, badge: badge)
+        }
+        
+        // 3. Low-confidence fallback to FallbackChain
+        let response = await fallbackChain.process(utterance: trimmed, context: context)
+        return .model(response: response, badge: response.badge)
+    }
     
     public func resolve(utterance: String) -> ResolvedIntent? {
         let trimmed = utterance.trimmingCharacters(in: .whitespacesAndNewlines)

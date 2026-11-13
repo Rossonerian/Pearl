@@ -64,10 +64,11 @@ public actor AuditLogger {
         // Redact potential secrets in args
         var safeArgs: [String: String] = [:]
         for (k, v) in args {
+            let sanitizedVal = KeychainService.redact(text: v)
             if k.lowercased().contains("key") || k.lowercased().contains("secret") || k.lowercased().contains("token") || v.hasPrefix("sk-") {
                 safeArgs[k] = "[REDACTED]"
             } else {
-                safeArgs[k] = v
+                safeArgs[k] = sanitizedVal
             }
         }
         

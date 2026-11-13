@@ -13,6 +13,9 @@ public struct PearlConfig: Codable, Sendable {
     public var pushToTalkDefault: Bool
     public var maxContextTokens: Int
     public var memoryDirectory: String
+    public var monthlySpendCapUSD: Double
+    public var maxTokensPerTurn: Int
+    public var pccEnabled: Bool
     
     public init(
         version: String = "2.0.0",
@@ -26,7 +29,10 @@ public struct PearlConfig: Codable, Sendable {
         bargeInEnabled: Bool = true,
         pushToTalkDefault: Bool = true,
         maxContextTokens: Int = 4096,
-        memoryDirectory: String = ("~/.pearl/memory" as NSString).expandingTildeInPath
+        memoryDirectory: String = ("~/.pearl/memory" as NSString).expandingTildeInPath,
+        monthlySpendCapUSD: Double = 10.0,
+        maxTokensPerTurn: Int = 4096,
+        pccEnabled: Bool = false
     ) {
         self.version = version
         self.hotkey = hotkey
@@ -40,6 +46,9 @@ public struct PearlConfig: Codable, Sendable {
         self.pushToTalkDefault = pushToTalkDefault
         self.maxContextTokens = maxContextTokens
         self.memoryDirectory = memoryDirectory
+        self.monthlySpendCapUSD = monthlySpendCapUSD
+        self.maxTokensPerTurn = maxTokensPerTurn
+        self.pccEnabled = pccEnabled
     }
     
     public static var defaultConfigurationDirectory: URL {
