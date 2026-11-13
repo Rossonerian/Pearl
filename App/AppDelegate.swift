@@ -2,6 +2,7 @@ import AppKit
 import Foundation
 import PearlCore
 import PearlTools
+import PearlVoice
 
 public final class AppDelegate: NSObject, NSApplicationDelegate {
     private var hudPanel: HUDPanel!
@@ -39,7 +40,16 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         // 4. Register Native Typed Tools
         registerNativeTools()
         
-        // 5. Setup Unix Domain Socket Server for CLI
+        // 5. Setup Live Voice Pipeline & 60 Hz Metering
+        AudioCaptureEngine.shared.onLevelMeterUpdated = { [weak self] level in
+            self?.hudPanel.hudView.updateAudioLevel(CGFloat(level))
+        }
+        
+        BargeInController.shared.onBargeInTriggered = { [weak self] in
+            self?.hudPanel.showPill(text: "Listening...", thinking: false)
+        }
+        
+        // 6. Setup Unix Domain Socket Server for CLI
         socketServer = UnixSocketServer(socketPath: config.socketPath)
         socketServer.onCommandHandler = { [weak self] request in
             return self?.handleIPCRequest(request) ?? IPCResponse(id: request.id, success: false, message: "Server shutting down")
