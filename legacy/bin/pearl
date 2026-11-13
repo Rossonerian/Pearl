@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Pearl — Personal AI Companion for Rosso on MacBook Neo
+# Pearl — Personal AI Companion for User on MacBook Neo
 # Continuous Learning Architecture, OpenHistory Telemetry, Liquid Glass Waveform HUD
 set -uo pipefail
 
@@ -52,7 +52,7 @@ add_learned_rule() {
     
     # Log an autonomous reflection into Pearl's diary
     if [ -x "$PERSONALITY_BIN" ]; then
-        "$PERSONALITY_BIN" --reflect "Rosso taught me a new preference: $rule. Integrating this into how I support him on MacBook Neo." >/dev/null 2>&1 || true
+        "$PERSONALITY_BIN" --reflect "User taught me a new preference: $rule. Integrating this into how I support him on MacBook Neo." >/dev/null 2>&1 || true
     fi
 }
 
@@ -80,7 +80,7 @@ pearl_guard_validate() {
     fi
 
     # 2. Catastrophic Filesystem Deletions
-    if echo "$cmd" | grep -iqE '(^|[;&|`[:space:]]+)rm([[:space:]]+-[a-zA-Z0-9]*[rfRF][a-zA-Z0-9]*)*[[:space:]]+(/|~|\$HOME|\$\{HOME\}|/Users/rossonerian)(/|/\*|\*|[[:space:]]+|$)'; then
+    if echo "$cmd" | grep -iqE '(^|[;&|`[:space:]]+)rm([[:space:]]+-[a-zA-Z0-9]*[rfRF][a-zA-Z0-9]*)*[[:space:]]+(/|~|\$HOME|\$\{HOME\}|/Users/usernerian)(/|/\*|\*|[[:space:]]+|$)'; then
         return 1
     fi
     if echo "$cmd" | grep -iqE '(^|[;&|`[:space:]]+)rm([[:space:]]+-[a-zA-Z0-9]*[rfRF][a-zA-Z0-9]*)*[[:space:]]+(/System|/Library|/Applications|/usr|/bin|/sbin|/private|/etc|/var)'; then
@@ -113,7 +113,7 @@ pearl_guard_validate() {
     fi
 
     # 5. Credential, Private Key & Keychain Exfiltration
-    if echo "$cmd" | grep -iqE '(~|\$HOME|/Users/rossonerian)/\.?(ssh|gnupg|claude\.json|zeroclaw/\.secret_key)'; then
+    if echo "$cmd" | grep -iqE '(~|\$HOME|/Users/usernerian)/\.?(ssh|gnupg|claude\.json|zeroclaw/\.secret_key)'; then
         return 1
     fi
     if echo "$cmd" | grep -iqE 'security[[:space:]]+(dump-keychain|find-generic-password|find-internet-password|export)'; then
@@ -191,7 +191,7 @@ resolve_project_dir() {
 # Usage help
 show_help() {
     cat << 'EOF'
-Pearl — Personal AI Companion for Rosso on MacBook Neo
+Pearl — Personal AI Companion for User on MacBook Neo
 Usage:
   pearl "<prompt>"         Talk to Pearl with Liquid Glass HUD & Sonia voice
   pearl learn "<fact>"     Teach Pearl a new rule or preference about you
@@ -267,7 +267,7 @@ if [[ $# -ge 1 && "$1" == "learn" ]]; then
     fi
     rule_text="$*"
     add_learned_rule "$rule_text"
-    reply="Got it, Rosso. I've updated your profile with that preference."
+    reply="Got it, User. I've updated your profile with that preference."
     printf '%s\n' "$reply"
     if [ "$VOICE" -eq 1 ] && [ -f "$CHIME_END" ]; then afplay "$CHIME_END" -v 0.25 & fi
     speak_text_sync "$reply"
@@ -294,8 +294,8 @@ if [[ $# -ge 1 && ("$1" == "notes" || "$1" == "note") ]]; then
             echo "=== Pearl Personal Scratchpad ==="
             cat "$NOTE_FILE"
         else
-            echo "Your scratchpad is currently clear, Rosso."
-            speak_text_sync "Your scratchpad is currently clear, Rosso."
+            echo "Your scratchpad is currently clear, User."
+            speak_text_sync "Your scratchpad is currently clear, User."
         fi
         exit 0
     else
@@ -318,7 +318,7 @@ if [[ $# -eq 1 && ("$1" == "battery" || "$1" == "batt") ]]; then
     if pmset -g batt 2>/dev/null | grep -iqE 'ac power|charging'; then
         batt_state="currently charging"
     fi
-    reply="MacBook Neo is at $batt_raw and is $batt_state, Rosso."
+    reply="MacBook Neo is at $batt_raw and is $batt_state, User."
     printf '%s\n' "$reply"
     if [ "$VOICE" -eq 1 ] && [ -f "$CHIME_END" ]; then afplay "$CHIME_END" -v 0.25 & fi
     speak_text_sync "$reply"
@@ -335,13 +335,13 @@ if [[ $# -ge 1 && ("$1" == "diary" || "$1" == "journal") ]]; then
             latest_thought="$("$PERSONALITY_BIN" --latest-diary 2>/dev/null)"
         fi
         if [ -z "$latest_thought" ]; then
-            latest_thought="I've been reflecting on our journey together on MacBook Neo, Rosso."
+            latest_thought="I've been reflecting on our journey together on MacBook Neo, User."
         fi
         if [ "$VOICE" -eq 1 ] && [ -f "$CHIME_END" ]; then afplay "$CHIME_END" -v 0.25 & fi
-        speak_text_sync "Here's what I wrote in my diary recently, Rosso: $latest_thought"
+        speak_text_sync "Here's what I wrote in my diary recently, User: $latest_thought"
     else
-        echo "My diary is just beginning, Rosso."
-        speak_text_sync "My diary is just beginning, Rosso."
+        echo "My diary is just beginning, User."
+        speak_text_sync "My diary is just beginning, User."
     fi
     exit 0
 fi
@@ -352,7 +352,7 @@ if [ $# -gt 0 ]; then
 elif [ ! -t 0 ]; then
     prompt="$(cat)"
 else
-    reply="I'm right here with you on MacBook Neo, Rosso. What are we diving into?"
+    reply="I'm right here with you on MacBook Neo, User. What are we diving into?"
     printf '%s\n' "$reply"
     speak_text_sync "$reply"
     exit 0
@@ -361,7 +361,7 @@ fi
 # Trim whitespace
 prompt="$(printf '%s' "$prompt" | tr -d '\r' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
 if [ -z "$prompt" ]; then
-    reply="I didn't quite catch that, Rosso. What's on your mind?"
+    reply="I didn't quite catch that, User. What's on your mind?"
     printf '%s\n' "$reply"
     speak_text_sync "$reply"
     exit 0
@@ -369,7 +369,7 @@ fi
 
 # Guardrail Interception: Enforce Tier 0 safety validator (< 0.8ms)
 if ! pearl_guard_validate "$prompt"; then
-    reply="I can't run that, Rosso. It violates our safety guardrails to keep MacBook Neo secure."
+    reply="I can't run that, User. It violates our safety guardrails to keep MacBook Neo secure."
     printf '%s\n' "$reply"
     if [ "$VOICE" -eq 1 ] && [ -f "$CHIME_END" ]; then afplay "$CHIME_END" -v 0.25 & fi
     speak_text_sync "$reply"
@@ -389,7 +389,7 @@ if echo "$prompt" | grep -iqE '^(pearl,?\s*)?(remember\s+that\s+(i\s+|my\s+|we\s
         -e 's/^[Ll]earn[[:space:]]+that[[:space:]]+//' \
         -e 's/^[Nn]ote[[:space:]]+that[[:space:]]+//')"
     add_learned_rule "$cleaned_rule"
-    reply="Got it, Rosso. I've updated your profile with that preference."
+    reply="Got it, User. I've updated your profile with that preference."
     printf '%s\n' "$reply"
     if [ "$VOICE" -eq 1 ] && [ -f "$CHIME_END" ]; then afplay "$CHIME_END" -v 0.25 & fi
     speak_text_sync "$reply"
@@ -399,7 +399,7 @@ fi
 # 2. Signature Introduction Check
 if echo "$prompt" | grep -iqE '^(who\s+are\s+you|introduce\s+yourself|tell\s+me\s+about\s+yourself|what\s+is\s+your\s+name)'; then
     if [ "$VOICE" -eq 1 ] && [ -f "$CHIME_START" ]; then afplay "$CHIME_START" -v 0.35 & fi
-    reply="I'm Pearl — your personal companion and co-pilot living right here on MacBook Neo. I keep your workflow seamless, remember your ideas, and watch over this machine. What are we diving into today, Rosso?"
+    reply="I'm Pearl — your personal companion and co-pilot living right here on MacBook Neo. I keep your workflow seamless, remember your ideas, and watch over this machine. What are we diving into today, User?"
     printf '%s\n' "$reply"
     if [ "$VOICE" -eq 1 ] && [ -f "$CHIME_END" ]; then afplay "$CHIME_END" -v 0.25 & fi
     speak_text_sync "$reply"
@@ -413,7 +413,7 @@ if echo "$prompt" | grep -iqE '^(remember(\s+to|\s*:|\s+)|\s*take\s+a\s+note(\s*
     timestamp="$(date '+%Y-%m-%d %H:%M')"
     echo "- [$timestamp] $note_content" >> "$NOTE_FILE"
     echo "- [$timestamp] Spoken note: $note_content" >> "$TIMELINE_FILE"
-    reply="I've tucked that into your scratchpad, Rosso."
+    reply="I've tucked that into your scratchpad, User."
     printf '%s\n' "$reply"
     if [ "$VOICE" -eq 1 ] && [ -f "$CHIME_END" ]; then afplay "$CHIME_END" -v 0.25 & fi
     speak_text_sync "$reply"
@@ -438,7 +438,7 @@ if echo "$prompt" | grep -iqE '^(pearl,?\s*)?(what( is|\x27s)? (in|written in) y
             latest_thought="$("$PERSONALITY_BIN" --latest-diary 2>/dev/null)"
         fi
         if [ -z "$latest_thought" ]; then
-            latest_thought="I'm thinking about how much progress we're making together on MacBook Neo, Rosso."
+            latest_thought="I'm thinking about how much progress we're making together on MacBook Neo, User."
         fi
         reply="In my diary, I wrote: $latest_thought"
         printf '%s\n' "$reply"
@@ -454,9 +454,9 @@ fi
 
 # 1. Screenshot Capture
 if echo "$prompt" | grep -iqE '^(pearl,?[[:space:]]*)?(take[[:space:]]+a[[:space:]]+screenshot|capture[[:space:]]+screen|take[[:space:]]+screenshot|capture[[:space:]]+the[[:space:]]+screen)$'; then
-    screenshot_file="/Users/rossonerian/Desktop/Screenshot_$(date +%Y%m%d_%H%M%S).png"
+    screenshot_file="/Users/usernerian/Desktop/Screenshot_$(date +%Y%m%d_%H%M%S).png"
     screencapture -x "$screenshot_file" 2>/dev/null || true
-    reply="Captured your screen to your Desktop, Rosso."
+    reply="Captured your screen to your Desktop, User."
     printf '%s\n' "$reply"
     if [ "$VOICE" -eq 1 ] && [ -f "$CHIME_END" ]; then afplay "$CHIME_END" -v 0.25 & fi
     speak_text_sync "$reply"
@@ -488,9 +488,9 @@ if echo "$prompt" | grep -iqE '^(pearl,?[[:space:]]*)?(delete|clean[[:space:]]*u
     done
     
     if [ "$count" -gt 0 ]; then
-        reply="I've safely moved $count screenshot$( [ "$count" -gt 1 ] && echo "s" ) to the Trash for you, Rosso."
+        reply="I've safely moved $count screenshot$( [ "$count" -gt 1 ] && echo "s" ) to the Trash for you, User."
     else
-        reply="I didn't find any screenshots in your saved folders to clean up, Rosso."
+        reply="I didn't find any screenshots in your saved folders to clean up, User."
     fi
     printf '%s\n' "$reply"
     if [ "$VOICE" -eq 1 ] && [ -f "$CHIME_END" ]; then afplay "$CHIME_END" -v 0.25 & fi
@@ -504,18 +504,18 @@ if echo "$prompt" | grep -iqE '^(pearl,?[[:space:]]*)?(set[[:space:]]+volume([[:
         level=50
         osascript -e 'set volume output muted false' 2>/dev/null || true
         osascript -e "set volume output volume $level" 2>/dev/null || true
-        reply="Volume set to ${level}%, Rosso."
+        reply="Volume set to ${level}%, User."
     elif echo "$prompt" | grep -iqE '(^|[^a-z])mute($|[^a-z])'; then
         level=0
         osascript -e 'set volume output muted true' 2>/dev/null || true
         osascript -e "set volume output volume 0" 2>/dev/null || true
-        reply="Volume set to 0%, Rosso."
+        reply="Volume set to 0%, User."
     else
         level="$(echo "$prompt" | grep -Eo '[0-9]+' | head -n 1)"
         if [ "$level" -gt 100 ]; then level=100; fi
         if [ "$level" -lt 0 ]; then level=0; fi
         osascript -e "set volume output volume $level" 2>/dev/null || true
-        reply="Volume set to ${level}%, Rosso."
+        reply="Volume set to ${level}%, User."
     fi
     printf '%s\n' "$reply"
     if [ "$VOICE" -eq 1 ] && [ -f "$CHIME_END" ]; then afplay "$CHIME_END" -v 0.25 & fi
@@ -537,21 +537,21 @@ if echo "$prompt" | grep -iqE '^(pearl,?[[:space:]]*)?git[[:space:]]+(status|dif
     proj_name="$(basename "$project_dir")"
     
     if [ ! -d "$project_dir" ]; then
-        reply="I couldn't find project $target_proj in ~/Projects, Rosso."
+        reply="I couldn't find project $target_proj in ~/Projects, User."
         printf '%s\n' "$reply"
     elif ! git -C "$project_dir" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-        reply="$proj_name is not a git repository, Rosso."
+        reply="$proj_name is not a git repository, User."
         printf '%s\n' "$reply"
     else
         case "$git_subcmd" in
             status)
                 git_summary="$(git -C "$project_dir" status -s)"
                 if [ -z "$git_summary" ]; then
-                    reply="Git working tree for $proj_name is clean, Rosso."
+                    reply="Git working tree for $proj_name is clean, User."
                     printf '%s\n' "$reply"
                 else
                     count="$(printf '%s\n' "$git_summary" | wc -l | tr -d ' ')"
-                    reply="There are $count modified or untracked files in $proj_name, Rosso."
+                    reply="There are $count modified or untracked files in $proj_name, User."
                     printf '%s\n' "$git_summary"
                     printf '%s\n' "$reply"
                 fi
@@ -559,10 +559,10 @@ if echo "$prompt" | grep -iqE '^(pearl,?[[:space:]]*)?git[[:space:]]+(status|dif
             diff)
                 git_summary="$(git -C "$project_dir" diff --stat)"
                 if [ -z "$git_summary" ]; then
-                    reply="No uncommitted diffs found in $proj_name, Rosso."
+                    reply="No uncommitted diffs found in $proj_name, User."
                     printf '%s\n' "$reply"
                 else
-                    reply="Found uncommitted diffs in $proj_name, Rosso."
+                    reply="Found uncommitted diffs in $proj_name, User."
                     printf '%s\n' "$git_summary"
                     printf '%s\n' "$reply"
                 fi
@@ -570,7 +570,7 @@ if echo "$prompt" | grep -iqE '^(pearl,?[[:space:]]*)?git[[:space:]]+(status|dif
             branch|branches)
                 git_summary="$(git -C "$project_dir" branch -a)"
                 curr_branch="$(git -C "$project_dir" branch --show-current 2>/dev/null || echo "main")"
-                reply="$proj_name is currently on branch $curr_branch, Rosso."
+                reply="$proj_name is currently on branch $curr_branch, User."
                 printf '%s\n' "$git_summary"
                 printf '%s\n' "$reply"
                 ;;
@@ -592,12 +592,12 @@ if echo "$prompt" | grep -iqE '^(pearl,?[[:space:]]*)?(find[[:space:]]+file|sear
     if [ "$count" -gt 0 ]; then
         printf '%s\n' "$results"
         if [ "$count" -eq 1 ]; then
-            reply="I found 1 matching file for you, Rosso."
+            reply="I found 1 matching file for you, User."
         else
-            reply="I found $count matching files for you, Rosso."
+            reply="I found $count matching files for you, User."
         fi
     else
-        reply="I found 0 matching files for you, Rosso."
+        reply="I found 0 matching files for you, User."
     fi
     printf '%s\n' "$reply"
     if [ "$VOICE" -eq 1 ] && [ -f "$CHIME_END" ]; then afplay "$CHIME_END" -v 0.25 & fi
@@ -617,7 +617,7 @@ if echo "$prompt" | grep -iqE '^(pearl,?[[:space:]]*)?(open[[:space:]]+project[[
     proj_name="$(basename "$project_dir")"
     open -a "Visual Studio Code" "$project_dir" 2>/dev/null || true
     open "$project_dir" 2>/dev/null || true
-    reply="I've opened $proj_name in VS Code for you, Rosso."
+    reply="I've opened $proj_name in VS Code for you, User."
     printf '%s\n' "$reply"
     if [ "$VOICE" -eq 1 ] && [ -f "$CHIME_END" ]; then afplay "$CHIME_END" -v 0.25 & fi
     speak_text_sync "$reply"
@@ -628,7 +628,7 @@ fi
 if echo "$prompt" | grep -iqE '^(pearl,?[[:space:]]*)?(open|launch|start)[[:space:]]+(.+)$'; then
     app_name="$(echo "$prompt" | sed -E -e 's/^[Pp]earl,?[[:space:]]*//' -e 's/^([Oo]pen|[Ll]aunch|[Ss]tart)[[:space:]]+//I' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/^"//' -e 's/"$//')"
     open -a "$app_name" 2>/dev/null || true
-    reply="Opening $app_name for you, Rosso."
+    reply="Opening $app_name for you, User."
     printf '%s\n' "$reply"
     if [ "$VOICE" -eq 1 ] && [ -f "$CHIME_END" ]; then afplay "$CHIME_END" -v 0.25 & fi
     speak_text_sync "$reply"
@@ -639,7 +639,7 @@ fi
 if echo "$prompt" | grep -iqE '^(pearl,?[[:space:]]*)?(close|quit)[[:space:]]+(.+)$'; then
     app_name="$(echo "$prompt" | sed -E -e 's/^[Pp]earl,?[[:space:]]*//' -e 's/^([Cc]lose|[Qq]uit)[[:space:]]+//I' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/^"//' -e 's/"$//')"
     osascript -e "tell application \"$app_name\" to quit" 2>/dev/null || true
-    reply="Closed $app_name, Rosso."
+    reply="Closed $app_name, User."
     printf '%s\n' "$reply"
     if [ "$VOICE" -eq 1 ] && [ -f "$CHIME_END" ]; then afplay "$CHIME_END" -v 0.25 & fi
     speak_text_sync "$reply"
@@ -665,7 +665,7 @@ if [ "$VOICE" -eq 1 ]; then
     fi
 fi
 
-# Collect OpenHistory Structural Telemetry + Rosso Profile (< 30ms, 0 MB persistent RAM)
+# Collect OpenHistory Structural Telemetry + User Profile (< 30ms, 0 MB persistent RAM)
 telemetry=""
 if [ -x "$TELEMETRY_BIN" ]; then
     telemetry="$("$TELEMETRY_BIN")"
@@ -676,12 +676,12 @@ User: $prompt"
 
 # Execute via ZeroClaw with Samantha-soul pearl-1.5b
 response="$("$HOME/.local/bin/zeroclaw" agent -a pearl -m "$full_query" 2>/dev/null)" || {
-    response="I'm right here on MacBook Neo, Rosso. What are we diving into?"
+    response="I'm right here on MacBook Neo, User. What are we diving into?"
 }
 
 # Clean response if empty
 if [ -z "$response" ]; then
-    response="I'm right here with you, Rosso. What would you like to do?"
+    response="I'm right here with you, User. What would you like to do?"
 fi
 
 # Output text response immediately to stdout

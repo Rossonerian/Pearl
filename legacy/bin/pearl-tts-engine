@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# pearl-tts-engine — manage the warm local TTS daemon.
+#
+#   pearl-tts-engine start     start (or report) the daemon
+#   pearl-tts-engine stop      stop it and release model memory
+#   pearl-tts-engine status    print the hello frame as JSON
+#   pearl-tts-engine run       run in the foreground (logs to stderr)
+set -uo pipefail
+
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+PEARL_TTS_BIN="$REPO_DIR/bin/pearl-tts"
+if [ ! -x "$PEARL_TTS_BIN" ] && command -v pearl-tts >/dev/null 2>&1; then
+  PEARL_TTS_BIN="$(command -v pearl-tts)"
+fi
+
+case "${1:-start}" in
+  start)
+    shift || true
+    exec "$PEARL_TTS_BIN" --engine-start "$@"
+    ;;
+  stop)
+    shift || true
+    exec "$PEARL_TTS_BIN" --engine-stop "$@"
+    ;;
+  status)
+    shift || true
+    exec "$PEARL_TTS_BIN" --engine-status "$@"
+    ;;
+  run|serve|foreground)
+    shift || true
+    if [ -d "${PEARL_TTS_HOME:-$HOME/.local/lib/pearl}/pearl_tts" ]; then
+      PKG_ROOT="${PEARL_TTS_HOME:-$HOME/.local/lib/pearl}"
+    else
+      PKG_ROOT="$REPO_DIR/src/tts"
+    fi
+    PY="${PEARL_TTS_PYTHON:-$HOME/.local/share/pearl/tts_env311/bin/python3}"
+    [ -x "$PY" ] || PY="$(command -v python3)"
+    export PYTHONPATH="$PKG_ROOT${PYTHONPATH:+:$PYTHONPATH}"
+    exec "$PY" -m pearl_tts.engine --serve --verbose "$@"
+    ;;
+  *)
+    echo "usage: pearl-tts-engine {start|stop|status|run}" >&2
+    exit 2
+    ;;
+esac

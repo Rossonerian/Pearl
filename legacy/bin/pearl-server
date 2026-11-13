@@ -2,7 +2,7 @@
 """
 Pearl Local HTTP Bridge Server
 ==============================
-High-performance, lightweight local HTTP bridge for Pearl, Rosso's personal AI companion.
+High-performance, lightweight local HTTP bridge for Pearl, User's personal AI companion.
 Provides native macOS Liquid Glass Web UI and REST/SSE API for Phi Browser and local clients.
 
 Port: 49200 (127.0.0.1)
@@ -31,10 +31,10 @@ from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 
 PORT = 49200
 HOST = "127.0.0.1"
-PEARL_BIN = "/Users/rossonerian/.local/bin/pearl"
-PEARL_BRIEF_BIN = "/Users/rossonerian/.local/bin/pearl-brief"
-PEARL_TELEMETRY_BIN = "/Users/rossonerian/.local/bin/pearl-telemetry"
-PEARL_PERSONALITY_BIN = "/Users/rossonerian/.local/bin/pearl-personality"
+PEARL_BIN = "/Users/usernerian/.local/bin/pearl"
+PEARL_BRIEF_BIN = "/Users/usernerian/.local/bin/pearl-brief"
+PEARL_TELEMETRY_BIN = "/Users/usernerian/.local/bin/pearl-telemetry"
+PEARL_PERSONALITY_BIN = "/Users/usernerian/.local/bin/pearl-personality"
 STATE_FILE = os.path.expanduser("~/.pearl/PERSONALITY_STATE.json")
 SCRATCHPAD_FILE = os.path.expanduser("~/.pearl/scratchpad.md")
 TIMELINE_FILE = os.path.expanduser("~/.pearl/timeline.md")
@@ -284,15 +284,15 @@ def get_briefing():
     batt = get_battery_info()
     notes = get_notes()
     return (
-        f"Good day, Rosso. It's {now.strftime('%A, %B %d, at %I:%M %p')}.\n"
+        f"Good day, User. It's {now.strftime('%A, %B %d, at %I:%M %p')}.\n"
         f"MacBook Neo is at {batt['percentage']} ({batt['state']}).\n"
         f"You have {notes['count']} active note(s) in your scratchpad."
     )
 
 def execute_pearl_cli(prompt):
-    """Execute /Users/rossonerian/.local/bin/pearl -q '<prompt>'."""
+    """Execute /Users/usernerian/.local/bin/pearl -q '<prompt>'."""
     env = os.environ.copy()
-    env["PATH"] = f"/Users/rossonerian/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:{env.get('PATH', '')}"
+    env["PATH"] = f"/Users/usernerian/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:{env.get('PATH', '')}"
     try:
         res = subprocess.run(
             [PEARL_BIN, "-q", prompt],
@@ -325,7 +325,7 @@ def fallback_ollama_generate(prompt):
         req = urllib.request.Request(url, data=payload, headers={"Content-Type": "application/json"})
         with urllib.request.urlopen(req, timeout=30) as resp:
             data = json.loads(resp.read().decode("utf-8"))
-            return data.get("response", "I'm right here with you on MacBook Neo, Rosso.")
+            return data.get("response", "I'm right here with you on MacBook Neo, User.")
     except Exception as e:
         return f"Pearl is standing by on MacBook Neo. (Error connecting to model: {e})"
 
@@ -926,7 +926,7 @@ HTML_UI = """<!DOCTYPE html>
                 <div class="pearl-avatar"></div>
                 <div class="brand-info">
                     <h1>Pearl</h1>
-                    <p>Rosso's AI Companion • MacBook Neo</p>
+                    <p>User's AI Companion • MacBook Neo</p>
                 </div>
             </div>
 
@@ -981,11 +981,11 @@ HTML_UI = """<!DOCTYPE html>
         <main class="chat-container" id="chat-stream">
             <div class="welcome-card" id="welcome-card">
                 <h2>
-                    <span>Good morning, Rosso</span>
+                    <span>Good morning, User</span>
                     <span class="hud-waveform"><span class="hud-bar"></span><span class="hud-bar"></span><span class="hud-bar"></span><span class="hud-bar"></span></span>
                 </h2>
                 <p>I'm Pearl — your personal companion living right here on MacBook Neo. I keep your workflow seamless, remember your ideas, and watch over this machine.</p>
-                <div class="quote" id="welcome-quote">"Rosso switched my primary mode to pure silent text on MacBook Neo. Removing all voice control and audio playback for a fast, quiet terminal workflow."</div>
+                <div class="quote" id="welcome-quote">"User switched my primary mode to pure silent text on MacBook Neo. Removing all voice control and audio playback for a fast, quiet terminal workflow."</div>
             </div>
         </main>
 
@@ -1211,7 +1211,7 @@ HTML_UI = """<!DOCTYPE html>
                 }
 
                 if (!streamedText) {
-                    body.innerHTML = "I'm right here with you on MacBook Neo, Rosso.";
+                    body.innerHTML = "I'm right here with you on MacBook Neo, User.";
                 }
 
             } catch (err) {
@@ -1223,7 +1223,7 @@ HTML_UI = """<!DOCTYPE html>
                         body: JSON.stringify({ prompt: prompt })
                     });
                     const fallbackData = await fallbackRes.json();
-                    streamedText = fallbackData.response || "I'm standing by, Rosso.";
+                    streamedText = fallbackData.response || "I'm standing by, User.";
                     body.innerHTML = formatMarkdown(streamedText);
                 } catch (fallbackErr) {
                     body.innerHTML = "Connection to Pearl interrupted: " + fallbackErr.message;
@@ -1269,7 +1269,7 @@ HTML_UI = """<!DOCTYPE html>
                 document.getElementById('chip-notes-count').textContent = data.count || 0;
                 list.innerHTML = '';
                 if (!data.notes || data.notes.length === 0) {
-                    list.innerHTML = '<div style="color:var(--text-muted); font-size:13px;">Your scratchpad is clear, Rosso.</div>';
+                    list.innerHTML = '<div style="color:var(--text-muted); font-size:13px;">Your scratchpad is clear, User.</div>';
                     return;
                 }
                 data.notes.forEach(n => {
@@ -1316,7 +1316,7 @@ HTML_UI = """<!DOCTYPE html>
                 const data = await res.json();
                 list.innerHTML = '';
                 if (!data.entries || data.entries.length === 0) {
-                    list.innerHTML = '<div style="color:var(--text-muted); font-size:13px;">My diary is just beginning, Rosso.</div>';
+                    list.innerHTML = '<div style="color:var(--text-muted); font-size:13px;">My diary is just beginning, User.</div>';
                     return;
                 }
                 data.entries.slice().reverse().forEach(e => {

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Pearl OpenHistory Structural Telemetry & Profile Collector
-# Collects macOS structural context + Rosso's personal profile in < 30ms
+# Collects macOS structural context + User's personal profile in < 30ms
 set -uo pipefail
 
 # 1. Circadian Phase & Time
@@ -94,7 +94,7 @@ if [ -x "$HOME/.local/bin/pearl-personality" ]; then
 fi
 
 echo "[MacBook Neo Telemetry: Day: $day_name, Time: $time_str ($phase), Battery: $batt_raw ($batt_state), Focused App: $front_app (Window: $front_win)${now_playing:+, $now_playing}, Active Notes: $note_count]"
-echo "[User Context: Name: Rosso | Role: Student & Aspiring Software Engineer | Tone: Casual warmth + high technical depth | Projects: Axiom26, BET_Catcher, GlassMail | Learned Rules: ${learned_rules:-Default}]"
+echo "[User Context: Name: User | Role: Student & Aspiring Software Engineer | Tone: Casual warmth + high technical depth | Projects: Axiom26, BET_Catcher, GlassMail | Learned Rules: ${learned_rules:-Default}]"
 if [ -n "$personality_state" ]; then
     echo "$personality_state"
 fi

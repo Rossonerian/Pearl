@@ -34,10 +34,10 @@ for f in state_template/*; do
 done
 
 # 4. Optional launch agent installation
-if [ -f "config/com.rossonerian.pearl-server.plist" ]; then
+if [ -f "config/com.usernerian.pearl-server.plist" ]; then
     echo "-> Installing Pearl HTTP server LaunchAgent..."
     mkdir -p "$HOME/Library/LaunchAgents"
-    cp config/com.rossonerian.pearl-server.plist "$HOME/Library/LaunchAgents/"
+    cp config/com.usernerian.pearl-server.plist "$HOME/Library/LaunchAgents/"
 fi
 
 echo "=== Pearl installation complete! ==="

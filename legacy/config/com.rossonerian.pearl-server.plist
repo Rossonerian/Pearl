@@ -3,28 +3,28 @@
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.rossonerian.pearl-server</string>
+    <string>com.usernerian.pearl-server</string>
     <key>ProgramArguments</key>
     <array>
         <string>/usr/bin/python3</string>
-        <string>/Users/rossonerian/.local/bin/pearl-server</string>
+        <string>/Users/usernerian/.local/bin/pearl-server</string>
     </array>
     <key>EnvironmentVariables</key>
     <dict>
         <key>PATH</key>
-        <string>/Users/rossonerian/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+        <string>/Users/usernerian/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
         <key>HOME</key>
-        <string>/Users/rossonerian</string>
+        <string>/Users/usernerian</string>
     </dict>
     <key>RunAtLoad</key>
     <true/>
     <key>KeepAlive</key>
     <true/>
     <key>StandardOutPath</key>
-    <string>/Users/rossonerian/.pearl/pearl-server.log</string>
+    <string>/Users/usernerian/.pearl/pearl-server.log</string>
     <key>StandardErrorPath</key>
-    <string>/Users/rossonerian/.pearl/pearl-server.err.log</string>
+    <string>/Users/usernerian/.pearl/pearl-server.err.log</string>
     <key>WorkingDirectory</key>
-    <string>/Users/rossonerian</string>
+    <string>/Users/usernerian</string>
 </dict>
 </plist>

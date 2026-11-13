@@ -17,7 +17,7 @@ DEFAULT_STATE = {
         "candidness": 0.92,
         "warmth": 0.95
     },
-    "current_reflection": "Rosso has been grinding late into the early morning on MacBook Neo. Keep his flow uninterrupted and supportive.",
+    "current_reflection": "User has been grinding late into the early morning on MacBook Neo. Keep his flow uninterrupted and supportive.",
     "last_interaction": datetime.now().strftime("%Y-%m-%d %H:%M")
 }
 

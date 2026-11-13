@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+# pearl-tts — streaming local neural speech for Pearl V2.
+#
+# This launcher only selects an interpreter and package path; all logic lives
+# in src/tts/pearl_tts.  It never installs dependencies behind your back.
+set -uo pipefail
+
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+# Package location: installed copy first, then the repository checkout.
+if [ -d "${PEARL_TTS_HOME:-$HOME/.local/lib/pearl}/pearl_tts" ]; then
+  PKG_ROOT="${PEARL_TTS_HOME:-$HOME/.local/lib/pearl}"
+elif [ -d "$REPO_DIR/src/tts/pearl_tts" ]; then
+  PKG_ROOT="$REPO_DIR/src/tts"
+else
+  echo "pearl-tts: cannot locate the pearl_tts package (run make install)" >&2
+  exit 1
+fi
+
+pick_python() {
+  if [ -n "${PEARL_TTS_PYTHON:-}" ]; then
+    echo "$PEARL_TTS_PYTHON"
+    return
+  fi
+  for candidate in \
+    "$HOME/.local/share/pearl/tts_env311/bin/python3" \
+    "$HOME/.local/share/pearl/tts_env312/bin/python3" \
+    "$HOME/.local/share/pearl/tts_env/bin/python3" \
+    /opt/homebrew/bin/python3.12 \
+    /opt/homebrew/bin/python3.11 \
+    /usr/local/bin/python3.11 \
+    /opt/homebrew/bin/python3 \
+    python3; do
+    if [ -x "$candidate" ] || command -v "$candidate" >/dev/null 2>&1; then
+      echo "$candidate"
+      return
+    fi
+  done
+  echo "python3"
+}
+
+PY="$(pick_python)"
+export PEARL_TTS_PYTHON="$PY"
+export PYTHONPATH="$PKG_ROOT${PYTHONPATH:+:$PYTHONPATH}"
+export PYTHONUNBUFFERED=1
+
+exec "$PY" -m pearl_tts.client "$@"

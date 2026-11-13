@@ -1,7 +1,7 @@
 /*
  * pearl-guard.c — Ultra-fast native macOS guardrail validator (< 0.8ms)
  * Protects MacBook Neo against catastrophic, destructive, or unauthorized operations
- * while permitting full developer freedom in /Users/rossonerian.
+ * while permitting full developer freedom in /Users/usernerian.
  */
 
 #include <stdio.h>
@@ -22,7 +22,7 @@ static const GuardRule RULES[] = {
      "Privilege escalation (sudo/su/doas) is permanently blocked."},
 
     // 2. Catastrophic Filesystem Deletions
-    {"(^|[;&|`[:space:]]+)rm([[:space:]]+-[a-zA-Z0-9]*[rfRF][a-zA-Z0-9]*)*[[:space:]]+(/|~|\\$HOME|\\$\\{HOME\\}|/Users/rossonerian)(/|/\\*|\\*|[[:space:]]+|$)", 
+    {"(^|[;&|`[:space:]]+)rm([[:space:]]+-[a-zA-Z0-9]*[rfRF][a-zA-Z0-9]*)*[[:space:]]+(/|~|\\$HOME|\\$\\{HOME\\}|/Users/usernerian)(/|/\\*|\\*|[[:space:]]+|$)", 
      "E_CATASTROPHIC_RM", 
      "Destructive recursive deletion of system or user root is blocked."},
 
@@ -57,7 +57,7 @@ static const GuardRule RULES[] = {
      "Disabling or flushing the packet filter firewall is blocked."},
 
     // 5. Credential, Private Key & Keychain Exfiltration
-    {"(~|\\$HOME|/Users/rossonerian)/\\.(ssh|gnupg|claude\\.json|zeroclaw/\\.secret_key)", 
+    {"(~|\\$HOME|/Users/usernerian)/\\.(ssh|gnupg|claude\\.json|zeroclaw/\\.secret_key)", 
      "E_SECRET_ACCESS", 
      "Direct access to private SSH keys, GPG keys, or API tokens is blocked."},
 

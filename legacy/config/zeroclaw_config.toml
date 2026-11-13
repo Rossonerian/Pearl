@@ -1,7 +1,7 @@
 schema_version = 3
 
 [gateway]
-web_dist_dir = "/Users/rossonerian/.local/share/zeroclaw/releases/0.8.6/web/dist"
+web_dist_dir = "/Users/usernerian/.local/share/zeroclaw/releases/0.8.6/web/dist"
 
 [providers.models.ollama.local]
 model = "pearl-1.5b"
@@ -14,24 +14,24 @@ model_provider = "ollama.local"
 risk_profile = "pearl_local"
 
 [agents.pearl.workspace]
-path = "/Users/rossonerian/.local/share/pearl/workspace"
+path = "/Users/usernerian/.local/share/pearl/workspace"
 
 [agents.jarvis]
 model_provider = "ollama.local"
 risk_profile = "pearl_local"
 
 [agents.jarvis.workspace]
-path = "/Users/rossonerian/.local/share/pearl/workspace"
+path = "/Users/usernerian/.local/share/pearl/workspace"
 
 [risk_profiles.pearl_local]
 level = "supervised"
 workspace_only = false
 allowed_roots = [
-  "/Users/rossonerian/Projects",
-  "/Users/rossonerian/Downloads",
-  "/Users/rossonerian/Desktop",
-  "/Users/rossonerian/Documents",
-  "/Users/rossonerian/.pearl",
+  "/Users/usernerian/Projects",
+  "/Users/usernerian/Downloads",
+  "/Users/usernerian/Desktop",
+  "/Users/usernerian/Documents",
+  "/Users/usernerian/.pearl",
   "/tmp"
 ]
 allowed_tools = ["shell", "file_read"]
