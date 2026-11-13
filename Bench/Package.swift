@@ -14,7 +14,8 @@ let package = Package(
         .executable(name: "spike1_apple_fm", targets: ["Spike1_AppleFM"]),
         .executable(name: "m1_verification", targets: ["M1Verification"]),
         .executable(name: "router_eval", targets: ["RouterEvaluation"]),
-        .executable(name: "action_bench", targets: ["ActionBenchmark"])
+        .executable(name: "action_bench", targets: ["ActionBenchmark"]),
+        .executable(name: "voice_e2e", targets: ["VoiceE2E"])
     ],
     dependencies: [
         .package(path: "..")
@@ -68,6 +69,16 @@ let package = Package(
                 .product(name: "PearlTools", package: "Pearl")
             ],
             path: "Sources/ActionBenchmark"
+        ),
+        .executableTarget(
+            name: "VoiceE2E",
+            dependencies: [
+                "BenchCore",
+                .product(name: "PearlCore", package: "Pearl"),
+                .product(name: "PearlTools", package: "Pearl"),
+                .product(name: "PearlVoice", package: "Pearl")
+            ],
+            path: "Sources/VoiceE2E"
         )
     ]
 )
