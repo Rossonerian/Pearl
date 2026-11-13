@@ -1,0 +1,135 @@
+#!/usr/bin/env python3
+import json, os, sys, time
+from datetime import datetime
+
+STATE_FILE = os.path.expanduser("~/.pearl/PERSONALITY_STATE.json")
+DIARY_FILE = os.path.expanduser("~/.pearl/diary.md")
+
+DEFAULT_STATE = {
+    "total_interactions": 12,
+    "familiarity_level": 2,
+    "familiarity_title": "Trusted Partner",
+    "current_mood": "late_night_introspective",
+    "mood_description": "Warm, gentle, protective, and focused. Keeping answers punchy and grounded for late-night work.",
+    "traits": {
+        "wit": 0.88,
+        "empathy": 0.96,
+        "candidness": 0.92,
+        "warmth": 0.95
+    },
+    "current_reflection": "User has been grinding late into the early morning on MacBook Neo. Keep his flow uninterrupted and supportive.",
+    "last_interaction": datetime.now().strftime("%Y-%m-%d %H:%M")
+}
+
+def load_state():
+    if os.path.exists(STATE_FILE):
+        try:
+            with open(STATE_FILE, "r") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return DEFAULT_STATE.copy()
+
+def save_state(state):
+    tmp = STATE_FILE + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump(state, f, indent=2)
+    os.replace(tmp, STATE_FILE)
+
+def calculate_familiarity(count):
+    if count <= 10:
+        return 1, "New Co-pilot"
+    elif count <= 30:
+        return 2, "Trusted Partner"
+    elif count <= 75:
+        return 3, "Symbiotic Companion"
+    else:
+        return 4, "Unshakable Ally"
+
+def calculate_mood():
+    hour = datetime.now().hour
+    if hour >= 23 or hour < 5:
+        return "late_night_introspective", "Warm, gentle, protective, and focused. Keeping answers punchy and grounded for late-night work."
+    elif 5 <= hour < 12:
+        return "morning_clarity", "Bright, motivating, energetic, and ready to tackle the day's engineering sprints."
+    elif 12 <= hour < 18:
+        return "focused_builder", "Sharp, technical, highly efficient, and in deep problem-solving mode."
+    else:
+        return "reflective_wind_down", "Relaxed, conversational, witty, and unwinding from the day."
+
+def tick():
+    state = load_state()
+    state["total_interactions"] = state.get("total_interactions", 0) + 1
+    lvl, title = calculate_familiarity(state["total_interactions"])
+    state["familiarity_level"] = lvl
+    state["familiarity_title"] = title
+    
+    mood, desc = calculate_mood()
+    state["current_mood"] = mood
+    state["mood_description"] = desc
+    state["last_interaction"] = datetime.now().strftime("%Y-%m-%d %H:%M")
+    
+    save_state(state)
+    return state
+
+def get_state_string():
+    state = load_state()
+    mood = state.get("current_mood", "focused")
+    desc = state.get("mood_description", "")
+    lvl = state.get("familiarity_level", 2)
+    title = state.get("familiarity_title", "Trusted Partner")
+    count = state.get("total_interactions", 12)
+    refl = state.get("current_reflection", "")
+    return f"[Pearl Emotional State: Level {lvl} ({title}, {count} chats) | Mood: {mood} ({desc}) | Pearl's Inner Thought: \"{refl}\"]"
+
+def reflect(thought):
+    state = load_state()
+    state["current_reflection"] = thought
+    state["last_interaction"] = datetime.now().strftime("%Y-%m-%d %H:%M")
+    save_state(state)
+    
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
+    with open(DIARY_FILE, "a") as f:
+        f.write(f"\n## {timestamp} — Reflection\n{thought}\n")
+
+def get_latest_diary_entry():
+    if not os.path.exists(DIARY_FILE):
+        return ""
+    try:
+        with open(DIARY_FILE, "r") as f:
+            content = f.read()
+        entries = content.split("\n## ")
+        if len(entries) > 1:
+            last = entries[-1].strip()
+            lines = last.split("\n", 1)
+            if len(lines) > 1:
+                return lines[1].strip()
+            return lines[0].strip()
+    except Exception:
+        pass
+    return ""
+
+if __name__ == "__main__":
+    if len(sys.argv) > 1:
+        cmd = sys.argv[1]
+        if cmd == "--tick":
+            tick()
+            print(get_state_string())
+        elif cmd == "--state":
+            print(get_state_string())
+        elif cmd == "--latest-diary":
+            entry = get_latest_diary_entry()
+            if entry:
+                print(entry)
+            else:
+                print("My diary is just beginning.")
+        elif cmd == "--reflect" and len(sys.argv) > 2:
+            thought = " ".join(sys.argv[2:])
+            reflect(thought)
+            print(f"Recorded reflection: {thought}")
+        elif cmd == "--json":
+            print(json.dumps(load_state(), indent=2))
+        else:
+            print(get_state_string())
+    else:
+        print(get_state_string())

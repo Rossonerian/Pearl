@@ -1,0 +1,15 @@
+{
+  "total_interactions": 0,
+  "familiarity_level": 1,
+  "familiarity_title": "Default",
+  "current_mood": "neutral",
+  "mood_description": "Default state.",
+  "traits": {
+    "wit": 0.8,
+    "empathy": 0.8,
+    "candidness": 0.8,
+    "warmth": 0.8
+  },
+  "current_reflection": "",
+  "last_interaction": ""
+}

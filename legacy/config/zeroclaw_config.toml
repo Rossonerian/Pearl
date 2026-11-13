@@ -1,0 +1,67 @@
+schema_version = 3
+
+[gateway]
+web_dist_dir = "/Users/usernerian/.local/share/zeroclaw/releases/0.8.6/web/dist"
+
+[providers.models.ollama.local]
+model = "pearl-1.5b"
+uri = "http://127.0.0.1:11434"
+context_window = 4096
+native_tools = false
+
+[agents.pearl]
+model_provider = "ollama.local"
+risk_profile = "pearl_local"
+
+[agents.pearl.workspace]
+path = "/Users/usernerian/.local/share/pearl/workspace"
+
+[agents.jarvis]
+model_provider = "ollama.local"
+risk_profile = "pearl_local"
+
+[agents.jarvis.workspace]
+path = "/Users/usernerian/.local/share/pearl/workspace"
+
+[risk_profiles.pearl_local]
+level = "supervised"
+workspace_only = false
+allowed_roots = [
+  "/Users/usernerian/Projects",
+  "/Users/usernerian/Downloads",
+  "/Users/usernerian/Desktop",
+  "/Users/usernerian/Documents",
+  "/Users/usernerian/.pearl",
+  "/tmp"
+]
+allowed_tools = ["shell", "file_read"]
+auto_approve = ["shell", "file_read"]
+allowed_commands = [
+  "pearl-battery",
+  "pearl-brief",
+  "pearl-note",
+  "pearl-guard",
+  "git",
+  "ls",
+  "cat",
+  "open",
+  "mdfind",
+  "osascript",
+  "screencapture"
+]
+
+[memory]
+search_mode = "bm25"
+
+[tools]
+optional = []
+
+# ==============================================================================
+# Optional Phone Pairing Template (Disabled by default)
+# To pair with Telegram:
+#   zeroclaw config set channels.telegram.home.bot_token
+#   zeroclaw config set channels.telegram.home.enabled true
+# ==============================================================================
+# [channels.telegram.home]
+# enabled = false
+# bot_token = ""

@@ -23,3 +23,9 @@ __pycache__/
 tts_env/
 .venv/
 env/
+
+# Swift SPM
+.build/
+Package.resolved
+*.xcodeproj
+*.xcworkspace
