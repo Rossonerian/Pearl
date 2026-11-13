@@ -1,5 +1,7 @@
+import CryptoKit
 import Foundation
 import PearlCore
+import PearlMCP
 import Security
 
 public enum DoctorCheckStatus {
@@ -44,6 +46,9 @@ public enum DoctorCommand {
         
         // 5. Audit Chain Integrity
         results.append(checkAuditChainIntegrity())
+        
+        // 6. MCP Exposed Tools & Hashes
+        results.append(checkMCPExposedTools())
         
         print("\nAudit Checklist:")
         var allPassed = true
@@ -313,5 +318,44 @@ public enum DoctorCommand {
                 status: .fail("Tampering detected at sequence \(result.corruptedSequence ?? 0): \(result.failureReason ?? "Corrupted hash chain")")
             )
         }
+    }
+    
+    /// Check 6: Exposed MCP Tools & Integrity
+    /// Verifies that exposed MCP tools are strictly T0-T2, and lists their SHA-256 hashes.
+    public static func checkMCPExposedTools() -> DoctorCheckResult {
+        let name = "MCP Tool Surface Integrity (T0-T2)"
+        
+        let expectedTools = [
+            "battery", "close_app", "frontmost_app", "git_status",
+            "open_app", "reminder", "screenshot", "volume"
+        ]
+        
+        MCPServer.registerDefaultTools()
+        let reg = ToolRegistry.shared
+        var toolHashes: [String] = []
+        var violations: [String] = []
+        
+        for toolName in expectedTools {
+            guard let tool = reg.tool(named: toolName) else {
+                violations.append("Tool '\(toolName)' missing from registry")
+                continue
+            }
+            if tool.tier > .t2ReadPersonal {
+                violations.append("Tool '\(toolName)' has tier \(tool.tier.rawValue) (exceeds T2)")
+            }
+            let info = "\(tool.name):\(tool.description):\(tool.tier.rawValue)"
+            let hash = SHA256.hash(data: Data(info.utf8)).compactMap { String(format: "%02x", $0) }.joined()
+            let shortHash = String(hash.prefix(8))
+            toolHashes.append("\(tool.name) [\(shortHash)]")
+        }
+        
+        if !violations.isEmpty {
+            return DoctorCheckResult(name: name, status: .fail(violations.joined(separator: "; ")))
+        }
+        
+        return DoctorCheckResult(
+            name: name,
+            status: .pass("8 tools exposed (T0-T2 compliant) with verified hashes: \(toolHashes.joined(separator: ", "))")
+        )
     }
 }

@@ -12,7 +12,8 @@ let package = Package(
         .library(name: "PearlCore", targets: ["PearlCore"]),
         .library(name: "PearlTools", targets: ["PearlTools"]),
         .library(name: "PearlVoice", targets: ["PearlVoice"]),
-        .library(name: "PearlMemory", targets: ["PearlMemory"])
+        .library(name: "PearlMemory", targets: ["PearlMemory"]),
+        .library(name: "PearlMCP", targets: ["PearlMCP"])
     ],
     targets: [
         .target(
@@ -37,6 +38,11 @@ let package = Package(
                 .linkedLibrary("sqlite3")
             ]
         ),
+        .target(
+            name: "PearlMCP",
+            dependencies: ["PearlCore", "PearlTools"],
+            path: "Sources/PearlMCP"
+        ),
         .executableTarget(
             name: "PearlApp",
             dependencies: ["PearlCore", "PearlTools", "PearlVoice", "PearlMemory"],
@@ -44,7 +50,7 @@ let package = Package(
         ),
         .executableTarget(
             name: "PearlCLI",
-            dependencies: ["PearlCore", "PearlTools", "PearlVoice", "PearlMemory"],
+            dependencies: ["PearlCore", "PearlTools", "PearlVoice", "PearlMemory", "PearlMCP"],
             path: "Sources/pearl-cli"
         )
     ]
