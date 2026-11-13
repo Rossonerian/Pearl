@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+NOTE_FILE="$HOME/.pearl/scratchpad.md"
+mkdir -p "$HOME/.pearl"
+
+if [ $# -eq 0 ]; then
+    if [ -f "$NOTE_FILE" ]; then
+        echo "=== Pearl Executive Notes ==="
+        cat "$NOTE_FILE"
+    else
+        echo "No notes saved yet."
+    fi
+    exit 0
+fi
+
+note="$*"
+timestamp="$(date '+%Y-%m-%d %H:%M')"
+echo "- [$timestamp] $note" >> "$NOTE_FILE"
+echo "I've noted that for you: \"$note\""

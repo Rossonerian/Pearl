@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+# Pearl Studio Neural Voice Synthesizer (Sole Voice: en-GB-SoniaNeural)
+# Zero Local Fallbacks: Never substitutes voices. Falls back to silent terminal text on network error.
+set -uo pipefail
+
+TEXT="$*"
+if [ -z "$TEXT" ]; then
+    exit 0
+fi
+
+PYTHON="$HOME/.local/share/pearl/tts_env/bin/python3"
+HUD_BIN="$HOME/.local/bin/pearl-hud"
+OUT_FILE="/tmp/pearl_speech.mp3"
+TMP_FILE="/tmp/pearl_speech.tmp.mp3"
+FAIL_FILE="/tmp/pearl_speech.failed"
+
+rm -f "$OUT_FILE" "$TMP_FILE" "$FAIL_FILE"
+
+# Synthesize audio exclusively via Microsoft Azure Neural TTS (en-GB-SoniaNeural)
+if [ -x "$PYTHON" ]; then
+    "$PYTHON" -c '
+import asyncio, sys, edge_tts
+async def run():
+    text = sys.argv[1]
+    voice = sys.argv[2]
+    tmp = sys.argv[3]
+    try:
+        c = edge_tts.Communicate(text, voice)
+        await asyncio.wait_for(c.save(tmp), timeout=12.0)
+    except Exception:
+        sys.exit(1)
+asyncio.run(run())
+' "$TEXT" "${PEARL_VOICE:-en-GB-SoniaNeural}" "$TMP_FILE" 2>/dev/null || true
+
+    if [ -s "$TMP_FILE" ]; then
+        mv "$TMP_FILE" "$OUT_FILE"
+    fi
+fi
+
+# Check if synthesis succeeded
+if [ -s "$OUT_FILE" ]; then
+    # If pearl-hud is already running (e.g. In thinking mode), it will pick up $OUT_FILE automatically
+    if pgrep -x "pearl-hud" >/dev/null 2>&1; then
+        exit 0
+    fi
+    
+    # Standalone execution: Launch HUD in playback mode
+    if [ -x "$HUD_BIN" ]; then
+        exec "$HUD_BIN" --play "$OUT_FILE"
+    else
+        exec afplay "$OUT_FILE"
+    fi
+else
+    # Signal failure to any running HUD so it dissolves silently
+    touch "$FAIL_FILE"
+    exit 1
+fi

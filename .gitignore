@@ -1,0 +1,25 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+
+# Build Artifacts
+bin/pearl-guard
+bin/pearl-hud
+*.o
+*.dylib
+*.a
+
+# Temp & Runtime Logs
+*.tmp*
+*.log
+/tmp/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+tts_env/
+.venv/
+env/

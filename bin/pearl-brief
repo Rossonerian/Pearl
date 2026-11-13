@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+# Pearl MacBook Neo Briefing Helper
+set -euo pipefail
+
+hour="$(date +%H)"
+day_name="$(date +%A)"
+date_str="$(date '+%B %d, at %I:%M %p')"
+
+greeting="Good day"
+if [ "$hour" -ge 5 ] && [ "$hour" -lt 12 ]; then
+    greeting="Good morning"
+elif [ "$hour" -ge 12 ] && [ "$hour" -lt 18 ]; then
+    greeting="Good afternoon"
+elif [ "$hour" -ge 18 ] && [ "$hour" -lt 23 ]; then
+    greeting="Good evening"
+else
+    greeting="Burning the midnight oil on MacBook Neo?"
+fi
+
+# Battery Telemetry
+batt_raw="$(pmset -g batt 2>/dev/null | grep -Eo '[0-9]+%' | head -n 1 || echo 'unknown')"
+batt_state="on battery"
+if pmset -g batt 2>/dev/null | grep -iqE 'ac power|charging'; then
+    batt_state="plugged in and charging"
+fi
+
+# Memory
+free_pct="$(memory_pressure 2>/dev/null | grep -o 'System-wide memory free percentage: [0-9]*%' | awk '{print $5}' || echo 'optimal')"
+
+# Scratchpad
+note_count=0
+if [ -f "$HOME/.pearl/scratchpad.md" ]; then
+    note_count="$(grep -c '^- \[' "$HOME/.pearl/scratchpad.md" 2>/dev/null || echo 0)"
+fi
+
+echo "$greeting It's $day_name, $date_str."
+echo "MacBook Neo is at $batt_raw ($batt_state) with $free_pct memory free."
+if [ "$note_count" -gt 0 ]; then
+    echo "You have $note_count active note(s) in your scratchpad."
+else
+    echo "Your scratchpad is currently clear."
+fi
