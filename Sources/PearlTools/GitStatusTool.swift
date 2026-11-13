@@ -15,9 +15,10 @@ public final class GitStatusTool: PearlTool {
             if FileManager.default.fileExists(atPath: FileManager.default.currentDirectoryPath + "/.git") {
                 return FileManager.default.currentDirectoryPath
             }
-            let pearlPath = "/Users/rossonerian/Projects/Pearl"
-            if FileManager.default.fileExists(atPath: pearlPath + "/.git") {
-                return pearlPath
+            let homeDir = FileManager.default.homeDirectoryForCurrentUser.path
+            let candidate = homeDir + "/Projects/Pearl"
+            if FileManager.default.fileExists(atPath: candidate + "/.git") {
+                return candidate
             }
             return FileManager.default.currentDirectoryPath
         }()

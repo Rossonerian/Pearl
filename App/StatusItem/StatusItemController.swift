@@ -3,6 +3,8 @@ import AppKit
 public final class StatusItemController: NSObject {
     private var statusItem: NSStatusItem?
     public var onToggleHUD: (() -> Void)?
+    public var onSettingsRequested: (() -> Void)?
+    public var onOnboardingRequested: (() -> Void)?
     public var onQuitRequested: (() -> Void)?
     
     public func setup() {
@@ -28,6 +30,14 @@ public final class StatusItemController: NSObject {
         toggleItem.target = self
         menu.addItem(toggleItem)
         
+        let settingsItem = NSMenuItem(title: "Settings...", action: #selector(settingsClicked), keyEquivalent: ",")
+        settingsItem.target = self
+        menu.addItem(settingsItem)
+        
+        let onboardingItem = NSMenuItem(title: "Run Onboarding...", action: #selector(onboardingClicked), keyEquivalent: "")
+        onboardingItem.target = self
+        menu.addItem(onboardingItem)
+        
         menu.addItem(NSMenuItem.separator())
         
         let quitItem = NSMenuItem(title: "Quit Pearl", action: #selector(quitClicked), keyEquivalent: "q")
@@ -39,6 +49,14 @@ public final class StatusItemController: NSObject {
     
     @objc private func toggleHUDClicked() {
         onToggleHUD?()
+    }
+    
+    @objc private func settingsClicked() {
+        onSettingsRequested?()
+    }
+    
+    @objc private func onboardingClicked() {
+        onOnboardingRequested?()
     }
     
     @objc private func quitClicked() {
