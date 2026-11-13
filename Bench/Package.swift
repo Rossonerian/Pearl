@@ -11,7 +11,11 @@ let package = Package(
         .executable(name: "spike4_hud", targets: ["Spike4_HUD"]),
         .executable(name: "swift_router_bench", targets: ["SwiftRouterBenchmark"]),
         .executable(name: "baseline_v1", targets: ["BaselineV1"]),
-        .executable(name: "spike1_apple_fm", targets: ["Spike1_AppleFM"])
+        .executable(name: "spike1_apple_fm", targets: ["Spike1_AppleFM"]),
+        .executable(name: "m1_verification", targets: ["M1Verification"])
+    ],
+    dependencies: [
+        .package(path: "..")
     ],
     targets: [
         .target(
@@ -37,6 +41,14 @@ let package = Package(
             name: "Spike1_AppleFM",
             dependencies: ["BenchCore"],
             path: "Sources/Spike1_AppleFM"
+        ),
+        .executableTarget(
+            name: "M1Verification",
+            dependencies: [
+                "BenchCore",
+                .product(name: "PearlCore", package: "Pearl")
+            ],
+            path: "Sources/M1Verification"
         )
     ]
 )
