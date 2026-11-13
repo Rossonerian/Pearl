@@ -74,6 +74,7 @@ guard !args.isEmpty else {
     Usage:
       pearl ping                  Check daemon status & latency
       pearl status                Show resident memory & active state
+      pearl doctor [--security]   Run security audit & integrity checks
       pearl show                  Show floating pill HUD
       pearl hide                  Hide floating pill HUD
       pearl remember <fact>       Explicitly remember a stated fact
@@ -87,6 +88,10 @@ guard !args.isEmpty else {
 
 let cmd = args[0].lowercased()
 switch cmd {
+case "doctor":
+    let isSecurity = args.contains("--security") || args.count == 1
+    let code = DoctorCommand.run(securityOnly: isSecurity)
+    exit(code)
 case "remember":
     guard args.count > 1 else {
         print("Usage: pearl remember <fact text>")

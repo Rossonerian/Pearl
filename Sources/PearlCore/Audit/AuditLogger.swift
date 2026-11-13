@@ -23,6 +23,40 @@ public struct AuditRecord: Codable, Sendable {
         self.trustState = trustState
         self.success = success
     }
+    
+    public static func formatArgs(_ args: [String: String]) -> String {
+        if args.isEmpty { return "[:]" }
+        return "[" + args.sorted(by: { $0.key < $1.key }).map { "\"\($0.key)\": \"\($0.value)\"" }.joined(separator: ", ") + "]"
+    }
+    
+    public static func computeHash(
+        seq: Int,
+        timestamp: String,
+        prevHash: String,
+        tool: String,
+        args: [String: String],
+        tier: Int,
+        trustState: String,
+        success: Bool
+    ) -> String {
+        let formatted = formatArgs(args)
+        let rawPayload = "\(seq)|\(timestamp)|\(prevHash)|\(tool)|\(formatted)|\(tier)|\(trustState)|\(success)"
+        let digest = SHA256.hash(data: Data(rawPayload.utf8))
+        return digest.compactMap { String(format: "%02x", $0) }.joined()
+    }
+    
+    public func recomputedHash() -> String {
+        return AuditRecord.computeHash(
+            seq: seq,
+            timestamp: timestamp,
+            prevHash: prevHash,
+            tool: tool,
+            args: args,
+            tier: tier,
+            trustState: trustState,
+            success: success
+        )
+    }
 }
 
 public actor AuditLogger {
@@ -72,9 +106,16 @@ public actor AuditLogger {
             }
         }
         
-        let rawPayload = "\(currentSeq)|\(isoDate)|\(lastHash)|\(tool)|\(safeArgs)|\(tier.rawValue)|\(trustState.rawValue)|\(success)"
-        let digest = SHA256.hash(data: Data(rawPayload.utf8))
-        let hashString = digest.compactMap { String(format: "%02x", $0) }.joined()
+        let hashString = AuditRecord.computeHash(
+            seq: currentSeq,
+            timestamp: isoDate,
+            prevHash: lastHash,
+            tool: tool,
+            args: safeArgs,
+            tier: tier.rawValue,
+            trustState: trustState.rawValue,
+            success: success
+        )
         
         let record = AuditRecord(
             seq: currentSeq,
