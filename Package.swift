@@ -46,7 +46,8 @@ let package = Package(
         .executableTarget(
             name: "PearlApp",
             dependencies: ["PearlCore", "PearlTools", "PearlVoice", "PearlMemory"],
-            path: "App"
+            path: "App",
+            exclude: ["Pearl.entitlements"]
         ),
         .executableTarget(
             name: "PearlCLI",

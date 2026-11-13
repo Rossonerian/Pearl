@@ -29,3 +29,9 @@ env/
 Package.resolved
 *.xcodeproj
 *.xcworkspace
+
+# Distribution & Release Artifacts
+dist/
+archives/
+*.dmg
+*.zip

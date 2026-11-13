@@ -1,4 +1,5 @@
 import AppKit
+import SwiftUI
 import Foundation
 import PearlCore
 import PearlTools
@@ -10,6 +11,8 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusController: StatusItemController!
     private var socketServer: UnixSocketServer!
     private var memoryPressureSource: DispatchSourceMemoryPressure?
+    private var settingsWindow: NSWindow?
+    private var onboardingWindow: NSWindow?
     private let launchDate = Date()
     
     public func applicationDidFinishLaunching(_ notification: Notification) {
@@ -24,6 +27,12 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         statusController = StatusItemController()
         statusController.onToggleHUD = { [weak self] in
             self?.toggleHUD()
+        }
+        statusController.onSettingsRequested = { [weak self] in
+            self?.openSettings()
+        }
+        statusController.onOnboardingRequested = { [weak self] in
+            self?.openOnboarding()
         }
         statusController.onQuitRequested = {
             NSApplication.shared.terminate(nil)
@@ -109,6 +118,45 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     
     private func handleMemoryPressure() {
         hudPanel?.hidePill()
+    }
+    
+    private func openSettings() {
+        if settingsWindow == nil {
+            let window = NSWindow(
+                contentRect: NSRect(x: 0, y: 0, width: 600, height: 480),
+                styleMask: [.titled, .closable, .miniaturizable],
+                backing: .buffered,
+                defer: false
+            )
+            window.center()
+            window.title = "Pearl Settings"
+            window.contentView = NSHostingView(rootView: SettingsView())
+            window.isReleasedWhenClosed = false
+            settingsWindow = window
+        }
+        settingsWindow?.makeKeyAndOrderFront(nil)
+        NSApplication.shared.activate(ignoringOtherApps: true)
+    }
+    
+    private func openOnboarding() {
+        if onboardingWindow == nil {
+            let window = NSWindow(
+                contentRect: NSRect(x: 0, y: 0, width: 580, height: 480),
+                styleMask: [.titled, .closable],
+                backing: .buffered,
+                defer: false
+            )
+            window.center()
+            window.title = "Welcome to Pearl"
+            let view = OnboardingView(onFinish: { [weak self] in
+                self?.onboardingWindow?.close()
+            })
+            window.contentView = NSHostingView(rootView: view)
+            window.isReleasedWhenClosed = false
+            onboardingWindow = window
+        }
+        onboardingWindow?.makeKeyAndOrderFront(nil)
+        NSApplication.shared.activate(ignoringOtherApps: true)
     }
     
     private func handleIPCRequest(_ req: IPCRequest) -> IPCResponse {

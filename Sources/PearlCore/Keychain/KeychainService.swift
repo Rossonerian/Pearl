@@ -23,7 +23,7 @@ public enum KeychainError: LocalizedError, Sendable {
 
 public final class KeychainService: @unchecked Sendable {
     public static let shared = KeychainService()
-    public static let defaultService = "com.rossonerian.pearl.keys"
+    public static let defaultService = "ai.pearl.keys"
     
     // In-memory override for test environments
     private var inMemoryStore: [String: String]?
