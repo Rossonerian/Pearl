@@ -12,19 +12,42 @@ public final class PolicyEngine: Sendable {
     public init() {}
     
     public func evaluate(tool: any PearlTool, args: [String: String], context: ToolExecutionContext) -> PolicyDecision {
-        // T0 Observe is always safe
+        // 1. Never-Tier validation: hard-blocked commands and paths
+        let neverResult = NeverTierValidator.checkTool(tool: tool, args: args)
+        if neverResult.isDenied {
+            return .denied(reason: neverResult.reason ?? "Never-Tier rule violation")
+        }
+        
+        // 2. T0 Observe is always safe
         if tool.tier == .t0Observe {
             return .allowed
         }
         
-        // Taint tracking: untrusted context cannot perform T3+ actions without explicit confirmation
+        // 3. Taint tracking evaluation
+        let effectiveTaint = context.taintState.isTainted ? context.taintState : TaintTracker.shared.currentState
+        if effectiveTaint.isTainted {
+            let taintDecision = TaintTracker.shared.evaluate(
+                tool: tool,
+                args: args,
+                providerIsLocal: context.providerIsLocal,
+                userConfirmed: context.userConfirmed,
+                freshConfirmationArgs: context.freshConfirmationArgs
+            )
+            if case .allowed = taintDecision {
+                // allowed under taint rules, proceed to standard checks
+            } else {
+                return taintDecision
+            }
+        }
+        
+        // 4. Untrusted context cannot perform T3+ actions without explicit confirmation
         if context.trustState == .untrusted && tool.tier >= .t3WorkspaceChanges {
             if !context.userConfirmed {
                 return .confirmationRequired(reason: "Context is tainted by external/untrusted content. Confirmation required for \(tool.name).")
             }
         }
         
-        // T4 and T5 always require confirmation
+        // 5. T4 and T5 always require confirmation
         if tool.tier >= .t4ExternalSideEffects && !context.userConfirmed {
             return .confirmationRequired(reason: "Action \(tool.name) has external or irreversible side effects.")
         }

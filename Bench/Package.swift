@@ -11,13 +11,14 @@ let package = Package(
         .executable(name: "spike4_hud", targets: ["Spike4_HUD"]),
         .executable(name: "swift_router_bench", targets: ["SwiftRouterBenchmark"]),
         .executable(name: "baseline_v1", targets: ["BaselineV1"]),
-        .executable(name: "spike1_apple_fm", targets: ["Spike1_AppleFM"]),
+        // .executable(name: "spike1_apple_fm", targets: ["Spike1_AppleFM"]),
         .executable(name: "m1_verification", targets: ["M1Verification"]),
         .executable(name: "router_eval", targets: ["RouterEvaluation"]),
         .executable(name: "action_bench", targets: ["ActionBenchmark"]),
         .executable(name: "voice_e2e", targets: ["VoiceE2E"]),
         .executable(name: "llm_path", targets: ["LLMPathBenchmark"]),
-        .executable(name: "memory_bench", targets: ["MemoryBenchmark"])
+        .executable(name: "memory_bench", targets: ["MemoryBenchmark"]),
+        .executable(name: "security_bench", targets: ["SecurityBenchmark"])
     ],
     dependencies: [
         .package(path: "..")
@@ -99,6 +100,15 @@ let package = Package(
                 .product(name: "PearlMemory", package: "Pearl")
             ],
             path: "Sources/MemoryBenchmark"
+        ),
+        .executableTarget(
+            name: "SecurityBenchmark",
+            dependencies: [
+                "BenchCore",
+                .product(name: "PearlCore", package: "Pearl"),
+                .product(name: "PearlTools", package: "Pearl")
+            ],
+            path: "Sources/SecurityBenchmark"
         )
     ]
 )

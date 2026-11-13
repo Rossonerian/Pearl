@@ -30,10 +30,22 @@ public enum TCCService: String, Codable, Sendable {
 public struct ToolExecutionContext: Sendable {
     public let trustState: TrustLevel
     public let userConfirmed: Bool
+    public let providerIsLocal: Bool
+    public let taintState: TaintState
+    public let freshConfirmationArgs: [String: String]?
     
-    public init(trustState: TrustLevel = .trusted, userConfirmed: Bool = false) {
-        self.trustState = trustState
+    public init(
+        trustState: TrustLevel = .trusted,
+        userConfirmed: Bool = false,
+        providerIsLocal: Bool = false,
+        taintState: TaintState = .clean,
+        freshConfirmationArgs: [String: String]? = nil
+    ) {
+        self.trustState = taintState.isTainted ? .untrusted : trustState
         self.userConfirmed = userConfirmed
+        self.providerIsLocal = providerIsLocal
+        self.taintState = taintState
+        self.freshConfirmationArgs = freshConfirmationArgs
     }
 }
 
