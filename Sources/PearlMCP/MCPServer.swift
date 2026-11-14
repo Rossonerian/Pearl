@@ -206,6 +206,10 @@ public final class MCPServer: @unchecked Sendable {
         if registry.tool(named: "screenshot") == nil { registry.register(ScreenshotTool()) }
         if registry.tool(named: "reminder") == nil { registry.register(ReminderTool()) }
         if registry.tool(named: "git_status") == nil { registry.register(GitStatusTool()) }
+        if registry.tool(named: "list_tasks") == nil { registry.register(ListTasksTool()) }
+        if registry.tool(named: "create_task") == nil { registry.register(CreateTaskTool()) }
+        if registry.tool(named: "complete_task") == nil { registry.register(CompleteTaskTool()) }
+        if registry.tool(named: "delete_task") == nil { registry.register(DeleteTaskTool()) }
     }
     
     /// Returns the MCP tool schema definition for an exposed tool
@@ -275,6 +279,54 @@ public final class MCPServer: @unchecked Sendable {
                     properties: [
                         "path": ToolSchemaProperty(type: "string", description: "Path to git repository (optional, defaults to current directory)")
                     ]
+                )
+            )
+        case "list_tasks":
+            return MCPToolInfo(
+                name: tool.name,
+                description: tool.description,
+                inputSchema: ToolInputSchema(
+                    properties: [
+                        "status": ToolSchemaProperty(type: "string", description: "Filter by status: pending, completed, cancelled, or all (default: pending)", enum: ["pending", "completed", "cancelled", "all"]),
+                        "priority": ToolSchemaProperty(type: "string", description: "Filter by priority: low, medium, high, urgent", enum: ["low", "medium", "high", "urgent"])
+                    ]
+                )
+            )
+        case "create_task":
+            return MCPToolInfo(
+                name: tool.name,
+                description: tool.description,
+                inputSchema: ToolInputSchema(
+                    properties: [
+                        "title": ToolSchemaProperty(type: "string", description: "Title of the task"),
+                        "notes": ToolSchemaProperty(type: "string", description: "Optional notes or details"),
+                        "priority": ToolSchemaProperty(type: "string", description: "Priority: low, medium, high, urgent (default: medium)", enum: ["low", "medium", "high", "urgent"]),
+                        "due_date": ToolSchemaProperty(type: "string", description: "Due date in ISO-8601 format (e.g. 2026-11-14T18:00:00Z)")
+                    ],
+                    required: ["title"]
+                )
+            )
+        case "complete_task":
+            return MCPToolInfo(
+                name: tool.name,
+                description: tool.description,
+                inputSchema: ToolInputSchema(
+                    properties: [
+                        "id": ToolSchemaProperty(type: "string", description: "UUID, 8-character ID prefix, or title of the task to mark completed")
+                    ],
+                    required: ["id"]
+                )
+            )
+        case "delete_task":
+            return MCPToolInfo(
+                name: tool.name,
+                description: tool.description,
+                inputSchema: ToolInputSchema(
+                    properties: [
+                        "id": ToolSchemaProperty(type: "string", description: "UUID, 8-character ID prefix, or title of the task to delete"),
+                        "confirm": ToolSchemaProperty(type: "string", description: "Pass 'true' to confirm deletion")
+                    ],
+                    required: ["id"]
                 )
             )
         default:

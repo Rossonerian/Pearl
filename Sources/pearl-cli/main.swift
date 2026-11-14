@@ -83,6 +83,8 @@ guard !args.isEmpty else {
       pearl remember <fact>       Explicitly remember a stated fact
       pearl forget <id>           Forget a fact by its identifier
       pearl memory [stats|export] Inspect or export long-term memory
+      pearl tasks [list|create|done|delete] Manage local SQLite tasks
+      pearl brief                 Generate executive morning briefing
       pearl quit                  Terminate Pearl daemon
       pearl "<command>"           Send query or command to Pearl
     """)
@@ -178,6 +180,98 @@ case "memory":
         }
         sema.wait()
     }
+case "brief", "briefing":
+    let result = sendIPC(command: "brief")
+    if let resp = result.response {
+        print(resp.message)
+    } else {
+        let sema = DispatchSemaphore(value: 0)
+        Task {
+            do {
+                let briefing = try await BriefingEngine.shared.generateMorningBriefing()
+                print(briefing)
+            } catch {
+                print("Error generating briefing: \(error.localizedDescription)")
+            }
+            sema.signal()
+        }
+        sema.wait()
+    }
+case "tasks", "task":
+    let sub = args.count > 1 ? args[1].lowercased() : "list"
+    let sema = DispatchSemaphore(value: 0)
+    Task {
+        do {
+            switch sub {
+            case "list":
+                let statusArg = args.count > 2 ? args[2] : "pending"
+                let tool = ListTasksTool()
+                let res = try await tool.execute(args: ["status": statusArg], context: ToolExecutionContext())
+                print(res.message)
+            case "create", "add":
+                guard args.count > 2 else {
+                    print("Usage: pearl tasks create <title> [--priority <low|medium|high|urgent>] [--due <ISO-date>]")
+                    sema.signal()
+                    return
+                }
+                var titleWords: [String] = []
+                var priority = "medium"
+                var due: String? = nil
+                var i = 2
+                while i < args.count {
+                    if args[i] == "--priority" && i + 1 < args.count {
+                        priority = args[i + 1]
+                        i += 2
+                    } else if args[i] == "--due" && i + 1 < args.count {
+                        due = args[i + 1]
+                        i += 2
+                    } else {
+                        titleWords.append(args[i])
+                        i += 1
+                    }
+                }
+                var toolArgs: [String: String] = [
+                    "title": titleWords.joined(separator: " "),
+                    "priority": priority
+                ]
+                if let d = due { toolArgs["due_date"] = d }
+                let tool = CreateTaskTool()
+                let res = try await tool.execute(args: toolArgs, context: ToolExecutionContext())
+                print(res.message)
+            case "done", "complete":
+                guard args.count > 2 else {
+                    print("Usage: pearl tasks done <id or title>")
+                    sema.signal()
+                    return
+                }
+                let target = args.dropFirst(2).joined(separator: " ")
+                let tool = CompleteTaskTool()
+                let res = try await tool.execute(args: ["id": target], context: ToolExecutionContext())
+                print(res.message)
+            case "delete", "rm":
+                guard args.count > 2 else {
+                    print("Usage: pearl tasks delete <id or title> [--confirm]")
+                    sema.signal()
+                    return
+                }
+                let confirm = args.contains("--confirm") || args.contains("-y")
+                let filtered = args.dropFirst(2).filter { $0 != "--confirm" && $0 != "-y" }
+                let target = filtered.joined(separator: " ")
+                let tool = DeleteTaskTool()
+                let res = try await tool.execute(
+                    args: ["id": target, "confirm": confirm ? "true" : "false"],
+                    context: ToolExecutionContext(userConfirmed: confirm)
+                )
+                print(res.message)
+            default:
+                print("Unknown tasks subcommand: '\(sub)'. Available: list, create, done, delete")
+            }
+        } catch {
+            print("Error: \(error.localizedDescription)")
+        }
+        sema.signal()
+    }
+    sema.wait()
 case "ping":
     let result = sendIPC(command: "ping")
     if let resp = result.response {

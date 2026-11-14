@@ -77,7 +77,33 @@ public final class CentralToolCatalog: @unchecked Sendable {
     private var metadataMap: [String: ToolMetadata] = [:]
     private let lock = NSLock()
     
-    public init() {}
+    public init() {
+        registerDefaultCoreTools()
+    }
+    
+    /// Pre-registers default built-in task execution tools (list_tasks, create_task, complete_task, delete_task).
+    public func registerDefaultCoreTools() {
+        register(ListTasksTool())
+        register(CreateTaskTool())
+        register(CompleteTaskTool())
+        register(DeleteTaskTool(), metadata: ToolMetadata(
+            name: "delete_task",
+            description: "Permanently delete a task by ID or title. Requires user confirmation.",
+            arguments: [
+                ToolArgumentDescriptor(name: "id", type: "string", description: "UUID, 8-character ID prefix, or title of the task to delete", isRequired: true),
+                ToolArgumentDescriptor(name: "confirm", type: "string", description: "Pass 'true' to confirm irreversible deletion", isRequired: false)
+            ],
+            tier: .t2ReadPersonal,
+            requiredTCC: [],
+            isReversible: false,
+            requiresConfirmation: true,
+            timeoutSeconds: 15.0,
+            supportsUndo: false,
+            nativeAssistantExposed: true,
+            cliExposed: true,
+            mcpExposed: true
+        ))
+    }
     
     public func register(_ tool: any PearlTool, metadata: ToolMetadata? = nil) {
         lock.lock()

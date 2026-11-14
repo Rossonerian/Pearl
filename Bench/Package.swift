@@ -19,10 +19,11 @@ let package = Package(
         .executable(name: "llm_path", targets: ["LLMPathBenchmark"]),
         .executable(name: "memory_bench", targets: ["MemoryBenchmark"]),
         .executable(name: "security_bench", targets: ["SecurityBenchmark"]),
-        .executable(name: "mcp_bench", targets: ["MCPVerification"])
+        .executable(name: "mcp_bench", targets: ["MCPVerification"]),
+        .executable(name: "task_engine_verification", targets: ["TaskEngineVerification"])
     ],
     dependencies: [
-        .package(path: "..")
+        .package(name: "Pearl", path: "..")
     ],
     targets: [
         .target(
@@ -120,6 +121,15 @@ let package = Package(
                 .product(name: "PearlTools", package: "Pearl")
             ],
             path: "Sources/MCPVerification"
+        ),
+        .executableTarget(
+            name: "TaskEngineVerification",
+            dependencies: [
+                "BenchCore",
+                .product(name: "PearlCore", package: "Pearl"),
+                .product(name: "PearlTools", package: "Pearl")
+            ],
+            path: "Sources/TaskEngineVerification"
         )
     ]
 )

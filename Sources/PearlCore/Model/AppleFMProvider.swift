@@ -77,7 +77,7 @@ public final class AppleFMProvider: ModelProvider, @unchecked Sendable {
         let intentInstructions = """
         You are Pearl local action resolver. Analyze the user request.
         If the request maps to one of the following tools, respond ONLY with a JSON object:
-        {"action": "<volume|battery|open_app|close_app|screenshot|trash_screenshots|reminder|undo|unknown>", "parameter": "<value or empty>"}
+        {"action": "<volume|battery|open_app|close_app|screenshot|trash_screenshots|reminder|undo|list_tasks|create_task|complete_task|delete_task|unknown>", "parameter": "<value or empty>"}
         If the request is conversational, general knowledge, or requires reasoning/coding, return {"action": "unknown", "parameter": ""}.
         """
         
@@ -237,6 +237,14 @@ public final class AppleFMProvider: ModelProvider, @unchecked Sendable {
             return ModelToolCall(toolName: "reminder", arguments: ["title": param])
         case "undo":
             return ModelToolCall(toolName: "undo", arguments: [:])
+        case "list_tasks":
+            return ModelToolCall(toolName: "list_tasks", arguments: ["status": param.isEmpty ? "pending" : param])
+        case "create_task":
+            return ModelToolCall(toolName: "create_task", arguments: ["title": param])
+        case "complete_task":
+            return ModelToolCall(toolName: "complete_task", arguments: ["id": param])
+        case "delete_task":
+            return ModelToolCall(toolName: "delete_task", arguments: ["id": param])
         default:
             return ModelToolCall(toolName: action, arguments: ["param": param])
         }
