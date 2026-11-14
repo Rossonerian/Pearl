@@ -77,7 +77,7 @@ public final class AppleFMProvider: ModelProvider, @unchecked Sendable {
         let intentInstructions = """
         You are Pearl local action resolver. Analyze the user request.
         If the request maps to one of the following tools, respond ONLY with a JSON object:
-        {"action": "<volume|battery|open_app|close_app|screenshot|trash_screenshots|reminder|undo|unknown>", "parameter": "<value or empty>"}
+        {"action": "<volume|battery|open_app|close_app|screenshot|trash_screenshots|reminder|undo|list_tasks|create_task|complete_task|delete_task|unknown>", "parameter": "<value or empty>"}
         If the request is conversational, general knowledge, or requires reasoning/coding, return {"action": "unknown", "parameter": ""}.
         """
         
@@ -117,7 +117,11 @@ public final class AppleFMProvider: ModelProvider, @unchecked Sendable {
         }
         
         // 2. Direct conversational generation
-        let conversationalInstructions = context.systemPrompt ?? "You are Pearl, an intelligent, concise on-device voice assistant for Mac. Provide direct, helpful answers."
+        var conversationalInstructions = context.systemPrompt ?? "You are Pearl, an intelligent, concise on-device voice assistant for Mac. Provide direct, helpful answers."
+        if let history = context.conversationHistory, !history.isEmpty {
+            let historyText = history.map { "User: \($0.cleanedInput)\nAssistant: \($0.assistantResponse)" }.joined(separator: "\n")
+            conversationalInstructions += "\n\nRecent conversation history:\n" + historyText
+        }
         let session = LanguageModelSession(model: model, instructions: conversationalInstructions)
         do {
             let res = try await session.respond(to: prompt)
@@ -237,6 +241,14 @@ public final class AppleFMProvider: ModelProvider, @unchecked Sendable {
             return ModelToolCall(toolName: "reminder", arguments: ["title": param])
         case "undo":
             return ModelToolCall(toolName: "undo", arguments: [:])
+        case "list_tasks":
+            return ModelToolCall(toolName: "list_tasks", arguments: ["status": param.isEmpty ? "pending" : param])
+        case "create_task":
+            return ModelToolCall(toolName: "create_task", arguments: ["title": param])
+        case "complete_task":
+            return ModelToolCall(toolName: "complete_task", arguments: ["id": param])
+        case "delete_task":
+            return ModelToolCall(toolName: "delete_task", arguments: ["id": param])
         default:
             return ModelToolCall(toolName: action, arguments: ["param": param])
         }

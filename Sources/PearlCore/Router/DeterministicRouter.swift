@@ -1,6 +1,6 @@
 import Foundation
 
-public struct ResolvedIntent: Sendable {
+public struct ResolvedIntent: Sendable, Codable, Equatable {
     public let toolName: String
     public let arguments: [String: String]
     public let confidence: Double
@@ -93,11 +93,11 @@ public final class DeterministicRouter: Sendable {
         }
         
         // 4. Volume Intent
-        if lower.contains("mute") || lower == "silence" || lower.contains("turn sound off") || lower.contains("sound off") {
-            return ResolvedIntent(toolName: "volume", arguments: ["level": "0"], confidence: 1.0)
-        }
         if lower.contains("unmute") {
             return ResolvedIntent(toolName: "volume", arguments: ["level": "30"], confidence: 1.0)
+        }
+        if lower.contains("mute") || lower == "silence" || lower.contains("turn sound off") || lower.contains("sound off") {
+            return ResolvedIntent(toolName: "volume", arguments: ["level": "0"], confidence: 1.0)
         }
         if let vol = extractVolumeLevel(from: lower) {
             return ResolvedIntent(toolName: "volume", arguments: ["level": "\(vol)"], confidence: 1.0)
@@ -133,15 +133,38 @@ public final class DeterministicRouter: Sendable {
             let text = String(cleaned.dropFirst(13)).trimmingCharacters(in: .whitespaces)
             return ResolvedIntent(toolName: "reminder", arguments: ["title": text], confidence: 0.95)
         }
-        if lower.hasPrefix("create reminder ") || lower.hasPrefix("add reminder ") {
+        if lower.hasPrefix("create reminder ") {
             let text = String(cleaned.dropFirst(16)).trimmingCharacters(in: .whitespaces)
             return ResolvedIntent(toolName: "reminder", arguments: ["title": text], confidence: 0.95)
+        }
+        if lower.hasPrefix("add reminder ") {
+            let text = String(cleaned.dropFirst(13)).trimmingCharacters(in: .whitespaces)
+            return ResolvedIntent(toolName: "reminder", arguments: ["title": text], confidence: 0.95)
+        }
+        
+        // 9. Tasks & To-Dos
+        if lower == "list tasks" || lower == "my tasks" || lower == "show tasks" || lower == "show my tasks" || lower == "task list" || lower == "what are my tasks" {
+            return ResolvedIntent(toolName: "list_tasks", arguments: ["status": "pending"], confidence: 1.0)
+        }
+        if lower.hasPrefix("create task ") || lower.hasPrefix("add task ") || lower.hasPrefix("new task ") {
+            let prefixCount = lower.hasPrefix("create task ") ? 12 : (lower.hasPrefix("add task ") ? 9 : 9)
+            let title = String(cleaned.dropFirst(prefixCount)).trimmingCharacters(in: .whitespaces)
+            return ResolvedIntent(toolName: "create_task", arguments: ["title": title], confidence: 0.98)
+        }
+        if lower.hasPrefix("complete task ") || lower.hasPrefix("finish task ") {
+            let prefixCount = lower.hasPrefix("complete task ") ? 14 : 12
+            let id = String(cleaned.dropFirst(prefixCount)).trimmingCharacters(in: .whitespaces)
+            return ResolvedIntent(toolName: "complete_task", arguments: ["id": id], confidence: 0.98)
+        }
+        if lower.hasPrefix("delete task ") {
+            let id = String(cleaned.dropFirst(12)).trimmingCharacters(in: .whitespaces)
+            return ResolvedIntent(toolName: "delete_task", arguments: ["id": id], confidence: 0.98)
         }
         
         return nil
     }
     
-    private func cleanUtterance(_ utterance: String) -> String {
+    func cleanUtterance(_ utterance: String) -> String {
         var text = utterance.trimmingCharacters(in: .whitespacesAndNewlines)
         let prefixes = [
             "hey pearl, ", "hey pearl ", "pearl, ", "pearl ",
@@ -159,10 +182,15 @@ public final class DeterministicRouter: Sendable {
                 }
             }
         }
-        let suffixes = [" please", ", please"]
-        for s in suffixes {
-            if text.lowercased().hasSuffix(s) {
-                text = String(text.dropLast(s.count)).trimmingCharacters(in: .whitespacesAndNewlines)
+        let suffixes = [", please", " please"]
+        var changedSuffix = true
+        while changedSuffix {
+            changedSuffix = false
+            for s in suffixes {
+                if text.lowercased().hasSuffix(s) {
+                    text = String(text.dropLast(s.count)).trimmingCharacters(in: .whitespacesAndNewlines)
+                    changedSuffix = true
+                }
             }
         }
         return text

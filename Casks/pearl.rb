@@ -1,10 +1,10 @@
 cask "pearl" do
-  version "2.0.0"
-  sha256 :no_check
+  version "3.0.0"
+  sha256 "ee96359eb82bbb2c1da7763b053e4713f2504f10cfe8765b06f34270009b07bd"
 
   url "https://github.com/rossonerian/Pearl/releases/download/v#{version}/Pearl-#{version}.dmg"
   name "Pearl"
-  desc "Ultra-low-latency, voice-first macOS assistant for Apple Silicon"
+  desc "Capable, private, lightweight native macOS personal AI assistant"
   homepage "https://github.com/rossonerian/Pearl"
 
   livecheck do

@@ -206,6 +206,10 @@ public final class MCPServer: @unchecked Sendable {
         if registry.tool(named: "screenshot") == nil { registry.register(ScreenshotTool()) }
         if registry.tool(named: "reminder") == nil { registry.register(ReminderTool()) }
         if registry.tool(named: "git_status") == nil { registry.register(GitStatusTool()) }
+        if registry.tool(named: "list_tasks") == nil { registry.register(ListTasksTool()) }
+        if registry.tool(named: "create_task") == nil { registry.register(CreateTaskTool()) }
+        if registry.tool(named: "complete_task") == nil { registry.register(CompleteTaskTool()) }
+        if registry.tool(named: "delete_task") == nil { registry.register(DeleteTaskTool()) }
     }
     
     /// Returns the MCP tool schema definition for an exposed tool
@@ -275,6 +279,152 @@ public final class MCPServer: @unchecked Sendable {
                     properties: [
                         "path": ToolSchemaProperty(type: "string", description: "Path to git repository (optional, defaults to current directory)")
                     ]
+                )
+            )
+        case "list_calendar_events":
+            return MCPToolInfo(
+                name: tool.name,
+                description: tool.description,
+                inputSchema: ToolInputSchema(
+                    properties: [
+                        "time_window": ToolSchemaProperty(type: "string", description: "Window to query: 'today', 'tomorrow', 'this week', or 'next N days'"),
+                        "start_date": ToolSchemaProperty(type: "string", description: "Optional start date/time (ISO 8601 or yyyy-MM-dd HH:mm)"),
+                        "end_date": ToolSchemaProperty(type: "string", description: "Optional end date/time (ISO 8601 or yyyy-MM-dd HH:mm)")
+                    ]
+                )
+            )
+        case "check_calendar_availability":
+            return MCPToolInfo(
+                name: tool.name,
+                description: tool.description,
+                inputSchema: ToolInputSchema(
+                    properties: [
+                        "start_date": ToolSchemaProperty(type: "string", description: "Proposed slot start date/time"),
+                        "end_date": ToolSchemaProperty(type: "string", description: "Proposed slot end date/time"),
+                        "duration": ToolSchemaProperty(type: "string", description: "Slot duration (e.g. '30m', '1h')")
+                    ],
+                    required: ["start_date"]
+                )
+            )
+        case "create_calendar_event":
+            return MCPToolInfo(
+                name: tool.name,
+                description: tool.description,
+                inputSchema: ToolInputSchema(
+                    properties: [
+                        "title": ToolSchemaProperty(type: "string", description: "Event title"),
+                        "start_date": ToolSchemaProperty(type: "string", description: "Event start date/time"),
+                        "end_date": ToolSchemaProperty(type: "string", description: "Event end date/time"),
+                        "duration": ToolSchemaProperty(type: "string", description: "Event duration"),
+                        "location": ToolSchemaProperty(type: "string", description: "Physical location or URL"),
+                        "notes": ToolSchemaProperty(type: "string", description: "Notes or description")
+                    ],
+                    required: ["title", "start_date"]
+                )
+            )
+        case "delete_calendar_event":
+            return MCPToolInfo(
+                name: tool.name,
+                description: tool.description,
+                inputSchema: ToolInputSchema(
+                    properties: [
+                        "id": ToolSchemaProperty(type: "string", description: "Event ID to delete"),
+                        "title": ToolSchemaProperty(type: "string", description: "Event title to delete"),
+                        "confirm": ToolSchemaProperty(type: "string", description: "Set to 'true' to confirm deletion")
+                    ]
+                )
+            )
+        case "get_display_info", "display_info":
+            return MCPToolInfo(
+                name: tool.name,
+                description: tool.description,
+                inputSchema: ToolInputSchema(
+                    properties: [
+                        "detailed": ToolSchemaProperty(type: "string", description: "Include all displays ('true')")
+                    ]
+                )
+            )
+        case "read_clipboard":
+            return MCPToolInfo(
+                name: tool.name,
+                description: tool.description,
+                inputSchema: ToolInputSchema(
+                    properties: [
+                        "max_length": ToolSchemaProperty(type: "string", description: "Maximum characters to return")
+                    ]
+                )
+            )
+        case "write_clipboard":
+            return MCPToolInfo(
+                name: tool.name,
+                description: tool.description,
+                inputSchema: ToolInputSchema(
+                    properties: [
+                        "text": ToolSchemaProperty(type: "string", description: "Text content to copy")
+                    ],
+                    required: ["text"]
+                )
+            )
+        case "post_notification", "notification":
+            return MCPToolInfo(
+                name: tool.name,
+                description: tool.description,
+                inputSchema: ToolInputSchema(
+                    properties: [
+                        "title": ToolSchemaProperty(type: "string", description: "Notification title"),
+                        "message": ToolSchemaProperty(type: "string", description: "Notification message text"),
+                        "subtitle": ToolSchemaProperty(type: "string", description: "Optional subtitle text"),
+                        "sound": ToolSchemaProperty(type: "string", description: "Play default sound ('true')")
+                    ],
+                    required: ["message"]
+                )
+            )
+        case "list_tasks":
+            return MCPToolInfo(
+                name: tool.name,
+                description: tool.description,
+                inputSchema: ToolInputSchema(
+                    properties: [
+                        "status": ToolSchemaProperty(type: "string", description: "Filter by status: pending, completed, cancelled, or all (default: pending)", enum: ["pending", "completed", "cancelled", "all"]),
+                        "priority": ToolSchemaProperty(type: "string", description: "Filter by priority: low, medium, high, urgent", enum: ["low", "medium", "high", "urgent"])
+                    ]
+                )
+            )
+        case "create_task":
+            return MCPToolInfo(
+                name: tool.name,
+                description: tool.description,
+                inputSchema: ToolInputSchema(
+                    properties: [
+                        "title": ToolSchemaProperty(type: "string", description: "Title of the task"),
+                        "notes": ToolSchemaProperty(type: "string", description: "Optional notes or details"),
+                        "priority": ToolSchemaProperty(type: "string", description: "Priority: low, medium, high, urgent (default: medium)", enum: ["low", "medium", "high", "urgent"]),
+                        "due_date": ToolSchemaProperty(type: "string", description: "Due date in ISO-8601 format (e.g. 2026-11-14T18:00:00Z)")
+                    ],
+                    required: ["title"]
+                )
+            )
+        case "complete_task":
+            return MCPToolInfo(
+                name: tool.name,
+                description: tool.description,
+                inputSchema: ToolInputSchema(
+                    properties: [
+                        "id": ToolSchemaProperty(type: "string", description: "UUID, 8-character ID prefix, or title of the task to mark completed")
+                    ],
+                    required: ["id"]
+                )
+            )
+        case "delete_task":
+            return MCPToolInfo(
+                name: tool.name,
+                description: tool.description,
+                inputSchema: ToolInputSchema(
+                    properties: [
+                        "id": ToolSchemaProperty(type: "string", description: "UUID, 8-character ID prefix, or title of the task to delete"),
+                        "confirm": ToolSchemaProperty(type: "string", description: "Pass 'true' to confirm deletion")
+                    ],
+                    required: ["id"]
                 )
             )
         default:

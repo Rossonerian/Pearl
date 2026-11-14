@@ -86,12 +86,19 @@ public final class FrontierProvider: ModelProvider, @unchecked Sendable {
         request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
         request.timeoutInterval = 15.0
         
+        var messages: [[String: Any]] = []
+        if let history = context.conversationHistory, !history.isEmpty {
+            for turn in history {
+                messages.append(["role": "user", "content": turn.cleanedInput])
+                messages.append(["role": "assistant", "content": turn.assistantResponse])
+            }
+        }
+        messages.append(["role": "user", "content": prompt])
+        
         var payload: [String: Any] = [
             "model": activeModelID,
             "max_tokens": context.maxTokens ?? 1024,
-            "messages": [
-                ["role": "user", "content": prompt]
-            ]
+            "messages": messages
         ]
         if let systemPrompt = context.systemPrompt {
             payload["system"] = systemPrompt

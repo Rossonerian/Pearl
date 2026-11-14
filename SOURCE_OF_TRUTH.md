@@ -16,7 +16,7 @@
 | :--- | :--- | :--- | :--- |
 | **M0** | Complete 37-Area Repository Audit & Docs | `audit/v3-repo-audit` | **Completed** |
 | **M1** | Complete & Stabilize V2 Baseline (Pipeline, Tool Execution, Tiers, IPC, Audit) | `fix/v2.1-stabilization` | **Next Up** |
-| **M2** | Memory V3 (SQLite Canonical Store, 6 Classes, Deduplication) | `feat/v3-memory` | Scheduled |
+| **M2** | Memory V3 (SQLite Canonical Store, 6 Classes, Deduplication) | `feat/v3-memory` | **Completed** |
 | **M3** | Conversation & Multi-Turn Intelligence Engine | `feat/v3-conversation` | Scheduled |
 | **M4** | Native macOS Capability Expansion (EventKit Calendar, Window Context) | `feat/v3-macos-capabilities` | Scheduled |
 | **M5** | Voice & Conversation UI Refinement | `feat/v3-voice` | Scheduled |
@@ -78,13 +78,28 @@
 
 ## 6. Open Branches & Planned PR Sequence
 
-1. `audit/v3-repo-audit`: Deliver Phase M0 audit, feature matrix, dependency map, risk register, design specification, and source of truth.
-2. `fix/v2.1-stabilization`: Implement `AssistantPipeline`, `ModelToolExecutor`, tool tier corrections, `AsyncUnixSocketServer`, and audit boot verification.
-3. `feat/v3-memory`: Implement canonical SQLite structured storage with 6 memory classes.
-4. `feat/v3-conversation`: Multi-turn session history, streaming, and reference resolution.
-5. `feat/v3-macos-capabilities`: EventKit calendar, expanded window and system context.
-6. `feat/v3-voice`: Unified audio capture service and conversation HUD view.
-7. `feat/v3-task-engine`: Persistent `TaskStore.sqlite` with reminder synchronization.
-8. `feat/v3-proactive`: Opt-in event-driven briefings and alerts.
-9. `test/v3-quality-suite`: SwiftPM XCTest targets and GitHub Actions CI runner.
-10. `release/v3.0.0`: Packaging, Homebrew cask updates, and reproducible verification.
+1. `audit/v3-repo-audit`: Deliver Phase M0 audit, feature matrix, dependency map, risk register, design specification, and source of truth. (Merged to `main`)
+2. `fix/v2.1-stabilization`: Implement `AssistantPipeline`, `ModelToolExecutor`, tool tier corrections, `AsyncUnixSocketServer`, and audit boot verification. (Merged to `main`, tagged `v2.1.0`)
+3. `feat/v3-memory`: Implement canonical SQLite structured storage with 6 memory classes. (Merged to `v3`)
+4. `feat/v3-conversation`: Multi-turn session history, streaming, and reference resolution. (Merged to `v3`)
+5. `feat/v3-macos-capabilities`: EventKit calendar, expanded window and system context. (Merged to `v3`)
+6. `feat/v3-voice`: Unified audio capture service and conversation HUD view. (Merged to `v3`)
+7. `feat/v3-task-engine`: Persistent `TaskStore.sqlite` with reminder synchronization. (Merged to `v3`)
+8. `test/v3-quality-suite`: SwiftPM XCTest targets and GitHub Actions CI runner. (Merged to `v3`)
+9. `release/v3.0.0`: Packaging, Homebrew cask updates, and reproducible verification. (Delivered)
+
+---
+
+## 7. Pearl V3 Production Release Status (100% Complete)
+
+| Milestone | Merged Commit | Scope & Verified Deliverable | Status |
+| :--- | :--- | :--- | :--- |
+| **Phase M0: Architecture & Audit** | `e936c3e` | 37-component audit, `DESIGN.md`, `RISK_REGISTER.md`, `FEATURE_MATRIX.md` | **100% COMPLETE** |
+| **Phase M1: V2 Baseline & Pipeline** | `e4129c6` | Canonical 16-stage `AssistantPipeline`, authorized `ModelToolExecutor`, async IPC | **100% COMPLETE** |
+| **Phase M2: Memory V3 Architecture** | `07bc037` | Canonical SQLite `memory.sqlite`, 6 classes, FTS5 BM25 ($p95 = 2.24\text{ ms}$), deduplication | **100% COMPLETE** |
+| **Phase M3: Conversation Engine** | `2044e84` | Multi-turn `SessionManager`, token budgeting, anaphoric reference resolution | **100% COMPLETE** |
+| **Phase M4: macOS System Capabilities** | `e61facf` | `EventKit` Calendar (`list`/`create`/`undo`/`delete`), Display Context, Redacted Clipboard | **100% COMPLETE** |
+| **Phase M5: Voice Pipeline & Native HUD** | `e2daa9f` | Unified `AudioPipelineService`, standby deallocation ($\le 30\text{ MB}$), 60 Hz history sheet & T2 in-HUD banner | **100% COMPLETE** |
+| **Phase M6/M7: Task Engine & Proactivity** | `e41df29` | SQLite `TaskStore`, typed task tools with undo, zero-polling executive morning briefing | **100% COMPLETE** |
+| **Phase M8: Testing & CI Runner** | `05e2cf8` | 96/96 XCTest unit tests, 100% router accuracy (851/851), `.github/workflows/ci.yml` | **100% COMPLETE** |
+| **Phase M9: Release Packaging** | `HEAD` | `dist/Pearl-3.0.0.dmg` signed bundle, `Casks/pearl.rb`, release notes | **100% COMPLETE** |

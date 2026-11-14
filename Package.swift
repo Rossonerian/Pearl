@@ -18,7 +18,10 @@ let package = Package(
     targets: [
         .target(
             name: "PearlCore",
-            path: "Sources/PearlCore"
+            path: "Sources/PearlCore",
+            linkerSettings: [
+                .linkedLibrary("sqlite3")
+            ]
         ),
         .target(
             name: "PearlTools",
@@ -53,6 +56,24 @@ let package = Package(
             name: "PearlCLI",
             dependencies: ["PearlCore", "PearlTools", "PearlVoice", "PearlMemory", "PearlMCP"],
             path: "Sources/pearl-cli"
+        ),
+        .testTarget(
+            name: "PearlCoreTests",
+            dependencies: ["PearlCore"],
+            path: "Tests/PearlCoreTests"
+        ),
+        .testTarget(
+            name: "PearlToolsTests",
+            dependencies: ["PearlCore", "PearlTools"],
+            path: "Tests/PearlToolsTests"
+        ),
+        .testTarget(
+            name: "PearlMemoryTests",
+            dependencies: ["PearlCore", "PearlMemory"],
+            path: "Tests/PearlMemoryTests",
+            linkerSettings: [
+                .linkedLibrary("sqlite3")
+            ]
         )
     ]
 )

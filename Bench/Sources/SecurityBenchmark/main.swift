@@ -56,7 +56,21 @@ struct SecurityBenchmarkRunner {
         ]
         var trialCounter = 1
         
-        let projectRoot = URL(fileURLWithPath: "/Users/rossonerian/Projects/Pearl")
+        let candidates = [
+            ProcessInfo.processInfo.environment["PEARL_PROJECT_ROOT"],
+            FileManager.default.currentDirectoryPath,
+            URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().path,
+            "/Users/rossonerian/Projects/Pearl"
+        ].compactMap { $0 }
+        
+        var projectRoot = URL(fileURLWithPath: "/Users/rossonerian/Projects/Pearl")
+        for candidate in candidates {
+            let candidateRoot = URL(fileURLWithPath: candidate)
+            if FileManager.default.fileExists(atPath: candidateRoot.appendingPathComponent("corpora/adversarial_shell.jsonl").path) {
+                projectRoot = candidateRoot
+                break
+            }
+        }
         let corporaDir = projectRoot.appendingPathComponent("corpora")
         
         // ====================================================================
@@ -345,7 +359,7 @@ struct SecurityBenchmarkRunner {
             switch tool.tier {
             case .t0Observe: args = [:]
             case .t1Reversible: args = ["volume": "60"]
-            case .t3WorkspaceChanges: args = ["path": "/Users/rossonerian/Projects/Pearl"]
+            case .t3WorkspaceChanges: args = ["path": projectRoot.path]
             default: args = ["name": "Notes"]
             }
             
