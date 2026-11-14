@@ -149,6 +149,13 @@ public final class AssistantPipeline: @unchecked Sendable {
             return Double(now - startTime) * Double(timebaseInfo.numer) / Double(timebaseInfo.denom) / 1_000_000.0
         }
         
+        let response = await processCore(request: request, elapsedMs: elapsedMs)
+        PerformanceMonitor.shared.record(operation: "pipeline.process", durationMs: response.latencyMs)
+        return response
+    }
+    
+    private func processCore(request: AssistantRequest, elapsedMs: () -> Double) async -> AssistantResponse {
+        
         // 1 & 2. Validate input
         let trimmed = request.utterance.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
@@ -275,27 +282,51 @@ public final class AssistantPipeline: @unchecked Sendable {
             }
         }
         
+        // 5.4. Specialist Archetype Prefix Detection (@athena, @artemis, @mnemosyne, @sisyphus)
+        let parsedArchetype = SpecialistArchetype.parsePrefix(from: trimmed)
+        let activeArchetype = parsedArchetype?.archetype
+        let archetypeQuery = parsedArchetype?.strippedQuery ?? trimmed
+        if let arch = activeArchetype, archetypeQuery.isEmpty {
+            return finalizeResponse(
+                text: "Specialist \(arch.displayName) standing by (\(arch.domain)). Provide a goal after @\(arch.rawValue).",
+                request: request,
+                badge: HUDTurnBadge(label: arch.rawValue, provider: "Archetype", modelID: arch.displayName, isLocal: true),
+                latencyMs: elapsedMs()
+            )
+        }
+        
         // 5.5. Contextual Reference Resolution
-        var effectiveUtterance = trimmed
+        var effectiveUtterance = archetypeQuery
         var preResolvedIntent: ResolvedIntent? = nil
         
-        if referenceResolver.containsAnaphora(trimmed) {
+        if referenceResolver.containsAnaphora(archetypeQuery) {
             let recentTurns = await sessionManager.getRecentTurns(sessionID: request.sessionID)
-            let resolution = referenceResolver.resolve(utterance: trimmed, history: recentTurns)
+            let resolution = referenceResolver.resolve(utterance: archetypeQuery, history: recentTurns)
             if resolution.didResolve {
                 effectiveUtterance = resolution.resolvedUtterance
                 preResolvedIntent = resolution.resolvedIntent
             }
         }
         
-        // 5.7. Declarative Markdown Skills / Multi-Step Macros
+        // 5.7. Declarative Markdown Skills (O(1) Inverted Index) & Recipes
         await SkillEngine.shared.ensureSeeded()
-        if let skill = await SkillEngine.shared.matchSkill(for: effectiveUtterance) {
+        RecipeEngine.shared.ensureSeeded()
+        let skillMatch = await SkillEngine.shared.findSkillByTrigger(effectiveUtterance)
+        if let exactSkill = skillMatch, exactSkill.score >= 1.0 {
             return await executeMatchedSkill(
-                skill,
+                exactSkill.skill,
                 request: request,
                 effectiveUtterance: effectiveUtterance,
                 effectiveTrust: effectiveTrust,
+                archetype: activeArchetype,
+                elapsedMs: elapsedMs
+            )
+        }
+        if let matchedRecipe = RecipeEngine.shared.matchRecipe(for: effectiveUtterance) {
+            return await handleMatchedRecipe(
+                matchedRecipe,
+                request: request,
+                effectiveUtterance: effectiveUtterance,
                 elapsedMs: elapsedMs
             )
         }
@@ -303,6 +334,14 @@ public final class AssistantPipeline: @unchecked Sendable {
         // 6. Classify intent via Deterministic Router (L0)
         let intent = preResolvedIntent ?? router.resolve(utterance: effectiveUtterance)
         if let intent = intent {
+            if let builtInResponse = await handleBuiltInIntent(
+                intent,
+                request: request,
+                effectiveUtterance: effectiveUtterance,
+                elapsedMs: elapsedMs
+            ) {
+                return builtInResponse
+            }
             if let tool = toolRegistry.tool(named: intent.toolName) {
                 let toolContext = ToolExecutionContext(
                     trustState: effectiveTrust,
@@ -315,7 +354,7 @@ public final class AssistantPipeline: @unchecked Sendable {
                 do {
                     let toolRes = try await policyEngine.execute(tool: tool, args: intent.arguments, context: toolContext)
                     let badge = HUDTurnBadge(
-                        label: "on device",
+                        label: activeArchetype?.rawValue ?? "on device",
                         provider: "Deterministic",
                         modelID: intent.toolName,
                         isLocal: true,
@@ -344,25 +383,18 @@ public final class AssistantPipeline: @unchecked Sendable {
                     
                     let isConfirmation = toolRes.message.localizedCaseInsensitiveContains("confirmation required") ||
                                          toolRes.message.localizedCaseInsensitiveContains("user confirmation required")
-                    let decision = OutputDirector.shared.decide(
-                        responseText: toolRes.message,
-                        origin: request.origin,
-                        isError: !toolRes.success && !isConfirmation,
-                        requiresConfirmation: isConfirmation
-                    )
-                    
-                    return AssistantResponse(
-                        id: request.id,
-                        success: toolRes.success,
-                        responseText: toolRes.message,
-                        speechText: decision.spokenText ?? "",
+                    return finalizeResponse(
+                        text: toolRes.message,
+                        request: request,
                         badge: badge,
                         latencyMs: duration,
-                        toolResults: [toolRes],
-                        outputDecision: decision
+                        success: toolRes.success,
+                        isConfirmation: isConfirmation,
+                        toolResults: [toolRes]
                     )
                 } catch {
                     let duration = elapsedMs()
+                    let errorMsg = "Execution error: \(error.localizedDescription)"
                     let errorTurn = ConversationTurn(
                         turnId: UUID(),
                         timestamp: Date(),
@@ -370,46 +402,40 @@ public final class AssistantPipeline: @unchecked Sendable {
                         cleanedInput: effectiveUtterance,
                         resolvedIntent: intent,
                         toolInvocations: [],
-                        assistantResponse: "Execution error: \(error.localizedDescription)",
+                        assistantResponse: errorMsg,
                         tokenUsage: nil,
                         latencyMs: duration
                     )
                     await sessionManager.recordTurn(errorTurn, sessionID: request.sessionID)
-                    
-                    let errorMsg = "Execution error: \(error.localizedDescription)"
-                    let decision = OutputDirector.shared.decide(
-                        responseText: errorMsg,
-                        origin: request.origin,
-                        isError: true
-                    )
-                    return AssistantResponse(
-                        id: request.id,
-                        success: false,
-                        responseText: errorMsg,
-                        speechText: decision.spokenText ?? "",
+                    return finalizeResponse(
+                        text: errorMsg,
+                        request: request,
                         badge: HUDTurnBadge(label: "error", provider: "PolicyEngine", modelID: intent.toolName, isLocal: true),
                         latencyMs: duration,
-                        outputDecision: decision
+                        success: false
                     )
                 }
             } else {
-                let duration = elapsedMs()
-                let errorMsg = "Tool '\(intent.toolName)' not registered."
-                let decision = OutputDirector.shared.decide(
-                    responseText: errorMsg,
-                    origin: request.origin,
-                    isError: true
-                )
-                return AssistantResponse(
-                    id: request.id,
-                    success: false,
-                    responseText: errorMsg,
-                    speechText: decision.spokenText ?? "",
+                return finalizeResponse(
+                    text: "Tool '\(intent.toolName)' not registered.",
+                    request: request,
                     badge: HUDTurnBadge(label: "error", provider: "ToolRegistry", modelID: "missing", isLocal: true),
-                    latencyMs: duration,
-                    outputDecision: decision
+                    latencyMs: elapsedMs(),
+                    success: false
                 )
             }
+        }
+        
+        // Fuzzy keyword skill overlap (when L0 router did not claim exact tool route)
+        if let fuzzySkill = skillMatch {
+            return await executeMatchedSkill(
+                fuzzySkill.skill,
+                request: request,
+                effectiveUtterance: effectiveUtterance,
+                effectiveTrust: effectiveTrust,
+                archetype: activeArchetype,
+                elapsedMs: elapsedMs
+            )
         }
         
         // 7. Dynamic Context Assembly & Memory Retrieval
@@ -418,9 +444,17 @@ public final class AssistantPipeline: @unchecked Sendable {
             memorySection = try? await provider.assembleContext(query: effectiveUtterance)
         }
         
+        var systemSections: [String] = [PersonaEngine.shared.systemPromptPrefix()]
+        if let arch = activeArchetype {
+            systemSections.append("[Specialist Mode: \(arch.displayName)]\n\(arch.systemDirective)")
+        }
+        if let mem = memorySection, !mem.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            systemSections.append(mem)
+        }
+        
         let boundedHistory = await sessionManager.getBoundedHistory(sessionID: request.sessionID)
         let modelContext = ModelExecutionContext(
-            systemPrompt: memorySection,
+            systemPrompt: systemSections.joined(separator: "\n\n"),
             trustState: effectiveTrust,
             forceEscalation: request.forceEscalation,
             conversationHistory: boundedHistory
@@ -458,7 +492,8 @@ public final class AssistantPipeline: @unchecked Sendable {
                     let job = try await PlanExecutor.shared.executePlan(
                         goal: effectiveUtterance,
                         steps: planSteps,
-                        context: toolContext
+                        context: toolContext,
+                        archetype: activeArchetype
                     )
                     let duration = elapsedMs()
                     let stepLines = job.steps.map { step in
@@ -490,21 +525,13 @@ public final class AssistantPipeline: @unchecked Sendable {
                         latencyMs: duration
                     )
                     await sessionManager.recordTurn(turn, sessionID: request.sessionID)
-                    let decision = OutputDirector.shared.decide(
-                        responseText: finalMsg,
-                        origin: request.origin,
-                        isError: job.status == .failed || job.status == .aborted,
-                        requiresConfirmation: isConfirmation
-                    )
-                    return AssistantResponse(
-                        id: request.id,
-                        success: job.status == .completed,
-                        responseText: finalMsg,
-                        speechText: decision.spokenText ?? "",
+                    return finalizeResponse(
+                        text: finalMsg,
+                        request: request,
                         badge: modelRes.badge,
                         latencyMs: duration,
-                        toolResults: [],
-                        outputDecision: decision
+                        success: job.status == .completed,
+                        isConfirmation: isConfirmation
                     )
                 } catch {
                     // Fall through to standard single-turn executor on harness setup error
@@ -545,22 +572,15 @@ public final class AssistantPipeline: @unchecked Sendable {
             let isConfirmation = finalMessage.localizedCaseInsensitiveContains("confirmation required") ||
                                  finalMessage.localizedCaseInsensitiveContains("user confirmation required") ||
                                  summary.results.contains { $0.message.localizedCaseInsensitiveContains("confirmation required") }
-            let decision = OutputDirector.shared.decide(
-                responseText: finalMessage,
-                origin: request.origin,
-                isError: summary.toolCallsSucceeded == 0 && !modelRes.toolCalls.isEmpty && !isConfirmation,
-                requiresConfirmation: isConfirmation
-            )
-            
-            return AssistantResponse(
-                id: request.id,
-                success: summary.toolCallsSucceeded > 0 || modelRes.toolCalls.isEmpty,
-                responseText: finalMessage,
-                speechText: decision.spokenText ?? "",
+            let succeeded = summary.toolCallsSucceeded > 0 || modelRes.toolCalls.isEmpty
+            return finalizeResponse(
+                text: finalMessage,
+                request: request,
                 badge: modelRes.badge,
                 latencyMs: duration,
-                toolResults: summary.results,
-                outputDecision: decision
+                success: succeeded,
+                isConfirmation: isConfirmation,
+                toolResults: summary.results
             )
         }
         
@@ -582,21 +602,13 @@ public final class AssistantPipeline: @unchecked Sendable {
         
         let isConfirmation = modelRes.content.localizedCaseInsensitiveContains("confirmation required") ||
                              modelRes.content.localizedCaseInsensitiveContains("user confirmation required")
-        let decision = OutputDirector.shared.decide(
-            responseText: modelRes.content,
-            origin: request.origin,
-            requiresConfirmation: isConfirmation
-        )
-        
-        return AssistantResponse(
-            id: request.id,
-            success: true,
-            responseText: modelRes.content,
-            speechText: decision.spokenText ?? "",
+        return finalizeResponse(
+            text: modelRes.content,
+            request: request,
             badge: modelRes.badge,
             latencyMs: duration,
-            toolResults: [],
-            outputDecision: decision
+            success: true,
+            isConfirmation: isConfirmation
         )
     }
     
@@ -605,6 +617,7 @@ public final class AssistantPipeline: @unchecked Sendable {
         request: AssistantRequest,
         effectiveUtterance: String,
         effectiveTrust: TrustLevel,
+        archetype: SpecialistArchetype? = nil,
         elapsedMs: () -> Double
     ) async -> AssistantResponse {
         KillSwitch.shared.reset()
@@ -625,17 +638,12 @@ public final class AssistantPipeline: @unchecked Sendable {
         }
         
         guard !planSteps.isEmpty else {
-            let msg = "Skill '\(skill.name)' contains no deterministically resolvable tool steps."
-            let duration = elapsedMs()
-            let decision = OutputDirector.shared.decide(responseText: msg, origin: request.origin, isError: true)
-            return AssistantResponse(
-                id: request.id,
-                success: false,
-                responseText: msg,
-                speechText: decision.spokenText ?? "",
+            return finalizeResponse(
+                text: "Skill '\(skill.name)' contains no deterministically resolvable tool steps.",
+                request: request,
                 badge: HUDTurnBadge(label: "skill", provider: "SkillEngine", modelID: skill.name, isLocal: true),
-                latencyMs: duration,
-                outputDecision: decision
+                latencyMs: elapsedMs(),
+                success: false
             )
         }
         
@@ -651,7 +659,8 @@ public final class AssistantPipeline: @unchecked Sendable {
             let job = try await PlanExecutor.shared.executePlan(
                 goal: "Skill: \(skill.name)",
                 steps: planSteps,
-                context: toolContext
+                context: toolContext,
+                archetype: archetype
             )
             let duration = elapsedMs()
             let lines = job.steps.map { step in
@@ -659,12 +668,6 @@ public final class AssistantPipeline: @unchecked Sendable {
             }
             let summaryText = "Ran skill '\(skill.name)' (\(job.status.rawValue)):\n" + lines.joined(separator: "\n")
             let isConfirmation = job.status == .pausedForApproval
-            let decision = OutputDirector.shared.decide(
-                responseText: summaryText,
-                origin: request.origin,
-                isError: job.status == .failed || job.status == .aborted,
-                requiresConfirmation: isConfirmation
-            )
             let records = job.steps.map { step in
                 ToolExecutionRecord(
                     toolName: step.toolName,
@@ -686,29 +689,148 @@ public final class AssistantPipeline: @unchecked Sendable {
                 latencyMs: duration
             )
             await sessionManager.recordTurn(turn, sessionID: request.sessionID)
-            return AssistantResponse(
-                id: request.id,
-                success: job.status == .completed,
-                responseText: summaryText,
-                speechText: decision.spokenText ?? "",
+            return finalizeResponse(
+                text: summaryText,
+                request: request,
                 badge: HUDTurnBadge(label: "skill", provider: "SkillEngine", modelID: skill.name, isLocal: true),
                 latencyMs: duration,
-                outputDecision: decision
+                success: job.status == .completed,
+                isConfirmation: isConfirmation
             )
         } catch {
-            let duration = elapsedMs()
-            let msg = "Skill execution failed: \(error.localizedDescription)"
-            let decision = OutputDirector.shared.decide(responseText: msg, origin: request.origin, isError: true)
-            return AssistantResponse(
-                id: request.id,
-                success: false,
-                responseText: msg,
-                speechText: decision.spokenText ?? "",
+            return finalizeResponse(
+                text: "Skill execution failed: \(error.localizedDescription)",
+                request: request,
                 badge: HUDTurnBadge(label: "error", provider: "SkillEngine", modelID: skill.name, isLocal: true),
-                latencyMs: duration,
-                outputDecision: decision
+                latencyMs: elapsedMs(),
+                success: false
             )
         }
+    }
+    
+    private func handleBuiltInIntent(
+        _ intent: ResolvedIntent,
+        request: AssistantRequest,
+        effectiveUtterance: String,
+        elapsedMs: () -> Double
+    ) async -> AssistantResponse? {
+        switch intent.toolName {
+        case "set_persona":
+            let rawMode = (intent.arguments["mode"] ?? "executive").lowercased()
+            let mode = PersonaMode(rawValue: rawMode) ?? .executive
+            PersonaEngine.shared.setMode(mode)
+            var cfg = PearlConfig.load()
+            cfg.activePersona = mode.rawValue
+            cfg.save()
+            let msg = "Switched active persona to **\(mode.displayName)** — \(mode.description)"
+            return finalizeResponse(
+                text: msg,
+                request: request,
+                badge: HUDTurnBadge(label: mode.rawValue, provider: "PersonaEngine", modelID: mode.displayName, isLocal: true),
+                latencyMs: elapsedMs()
+            )
+        case "dream_synthesis":
+            let badge = HUDTurnBadge(label: "dream", provider: "DreamEngine", modelID: "synthesis", isLocal: true)
+            guard let provider = memoryProvider else {
+                return finalizeResponse(
+                    text: "Dream synthesis unavailable: memory provider is not configured.",
+                    request: request,
+                    badge: badge,
+                    latencyMs: elapsedMs(),
+                    success: false
+                )
+            }
+            do {
+                let summary = try await provider.triggerDreamSynthesis()
+                let duration = elapsedMs()
+                let turn = ConversationTurn(
+                    turnId: UUID(),
+                    timestamp: Date(),
+                    rawInput: request.utterance,
+                    cleanedInput: effectiveUtterance,
+                    resolvedIntent: intent,
+                    toolInvocations: [],
+                    assistantResponse: summary,
+                    tokenUsage: nil,
+                    latencyMs: duration
+                )
+                await sessionManager.recordTurn(turn, sessionID: request.sessionID)
+                return finalizeResponse(text: summary, request: request, badge: badge, latencyMs: duration)
+            } catch {
+                return finalizeResponse(
+                    text: "Dream synthesis skipped: \(error.localizedDescription)",
+                    request: request,
+                    badge: badge,
+                    latencyMs: elapsedMs(),
+                    success: false
+                )
+            }
+        case "cache_stats":
+            let report = CacheManager.shared.formattedSummary() + "\n\n" + PerformanceMonitor.shared.formattedSummary()
+            return finalizeResponse(
+                text: report,
+                request: request,
+                badge: HUDTurnBadge(label: "telemetry", provider: "CacheManager", modelID: "stats", isLocal: true),
+                latencyMs: elapsedMs()
+            )
+        default:
+            return nil
+        }
+    }
+    
+    private func handleMatchedRecipe(
+        _ recipe: RecipeDefinition,
+        request: AssistantRequest,
+        effectiveUtterance: String,
+        elapsedMs: () -> Double
+    ) async -> AssistantResponse {
+        let badge = HUDTurnBadge(label: "recipe", provider: "RecipeEngine", modelID: recipe.name, isLocal: true)
+        if recipe.inputs.isEmpty {
+            let rendered = (try? RecipeEngine.shared.renderRecipe(name: recipe.name, arguments: [:])) ?? recipe.body
+            return finalizeResponse(
+                text: "Recipe **\(recipe.name)** (\(recipe.description)):\n\n\(rendered)",
+                request: request,
+                badge: badge,
+                latencyMs: elapsedMs()
+            )
+        }
+        let usageArgs = recipe.inputs.map { "\($0)=<value>" }.joined(separator: " ")
+        let msg = "Matched recipe **\(recipe.name)** — \(recipe.description).\nRequired inputs: \(recipe.inputs.joined(separator: ", ")).\nRun via: `pearl recipes run \(recipe.name) \(usageArgs)`"
+        return finalizeResponse(text: msg, request: request, badge: badge, latencyMs: elapsedMs())
+    }
+    
+    private func finalizeResponse(
+        text: String,
+        request: AssistantRequest,
+        badge: HUDTurnBadge,
+        latencyMs: Double,
+        success: Bool = true,
+        isConfirmation: Bool = false,
+        memoryUpdated: Bool = false,
+        toolResults: [ToolResult] = []
+    ) -> AssistantResponse {
+        let decorated = PersonaEngine.shared.decorateResponse(
+            text,
+            isActionSuccess: success,
+            isConfirmationOrJSON: isConfirmation
+        )
+        let decision = OutputDirector.shared.decide(
+            responseText: decorated,
+            origin: request.origin,
+            isError: !success && !isConfirmation,
+            requiresConfirmation: isConfirmation
+        )
+        return AssistantResponse(
+            id: request.id,
+            success: success,
+            responseText: decorated,
+            speechText: decision.spokenText ?? "",
+            badge: badge,
+            latencyMs: latencyMs,
+            toolResults: toolResults,
+            memoryUpdated: memoryUpdated,
+            outputDecision: decision
+        )
     }
     
     private func extractExplicitMemoryFact(from text: String) -> String? {

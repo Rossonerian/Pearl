@@ -65,9 +65,21 @@ public struct PearlToolsRegistry {
             OpenURLTool(),
             ReadActiveTabTool(),
             
+            // Skills, Recipes & Proposals
+            ProposeSkillTool(),
+            UseRecipeTool(),
+            SearchSkillCatalogTool(),
+            
             // SubBots & Autonomous Web Operations
             SubBotRunTool(),
             SubBotWorkflowTool(),
+            
+            // Obsidian Brain Vault & Atomic Output
+            VaultListTool(),
+            VaultReadTool(),
+            VaultWriteTool(),
+            VaultSearchTool(),
+            OutputFileTool(),
             
             // Communication & Mail Drafts
             CreateMailDraftTool(),

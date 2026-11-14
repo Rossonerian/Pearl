@@ -23,6 +23,7 @@ public final class SettingsViewModel {
     public var showWipeAlert = false
     public var statusMessage = ""
     public var autoCheckUpdates = true
+    public var activePersona = "executive"
     
     public init() {}
 }
@@ -82,6 +83,23 @@ public struct SettingsView: View {
                     .foregroundColor(.secondary)
             }
             
+            Section(header: Text("Persona & Talk-Back")) {
+                Picker("Assistant Persona:", selection: Binding(
+                    get: { state.activePersona },
+                    set: { newValue in
+                        state.activePersona = newValue
+                        if let mode = PersonaMode(rawValue: newValue) {
+                            PersonaEngine.shared.setMode(mode)
+                        }
+                        saveConfig()
+                    }
+                )) {
+                    ForEach(PersonaMode.allCases, id: \.rawValue) { mode in
+                        Text("\(mode.displayName) — \(mode.description)").tag(mode.rawValue)
+                    }
+                }
+            }
+            
             Section(header: Text("Updates & Distribution")) {
                 Toggle("Automatically check for updates via Sparkle", isOn: Binding(get: { state.autoCheckUpdates }, set: { state.autoCheckUpdates = $0 }))
                 Text("Updates are verified via EdDSA cryptographic signatures. In accordance with Pearl's zero-telemetry policy, system hardware profiling is disabled.")
@@ -91,7 +109,7 @@ public struct SettingsView: View {
             
             Section(header: Text("Diagnostic Info")) {
                 LabeledContent("App Version:") {
-                    Text("Pearl 3.1.0 (Production Release)")
+                    Text("Pearl 3.2.0 (Ultron Workflow Edition)")
                 }
                 LabeledContent("Host Architecture:") {
                     Text("Apple Silicon (A18 Pro / M-Series)")
@@ -240,6 +258,7 @@ public struct SettingsView: View {
         state.modelEndpoint = config.modelProviderEndpoint
         state.monthlySpendCap = config.monthlySpendCapUSD
         state.maxTokensPerTurn = config.maxTokensPerTurn
+        state.activePersona = PersonaEngine.shared.activeMode.rawValue
     }
     
     private func saveConfig() {
@@ -249,6 +268,7 @@ public struct SettingsView: View {
         config.modelProviderEndpoint = state.modelEndpoint
         config.monthlySpendCapUSD = state.monthlySpendCap
         config.maxTokensPerTurn = state.maxTokensPerTurn
+        config.activePersona = state.activePersona
         config.save()
     }
     

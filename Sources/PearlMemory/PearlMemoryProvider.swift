@@ -34,4 +34,19 @@ public final class PearlMemoryProvider: MemoryContextProvider, Sendable {
         }
         _ = try? await gate.detectAndProposePreference(from: utterance, source: "user", trust: trust)
     }
+    
+    public func triggerDreamSynthesis() async throws -> String {
+        let store = try? MemoryStore()
+        let engine = DreamEngine(vaultManager: .shared, memoryStore: store)
+        let dream = try await engine.synthesizeDream()
+        let themes = dream.sharedThemes.prefix(4).joined(separator: ", ")
+        let sources = dream.sourceNotes.map { "[[\($0)]]" }.joined(separator: ", ")
+        return """
+        Dream Synthesis complete: **\(dream.title)**
+        Saved note: `\(dream.savedNotePath)`
+        Themes: \(themes)
+        Connections: \(sources.isEmpty ? "none" : sources)
+        \(dream.bridgeNarrative)
+        """
+    }
 }
