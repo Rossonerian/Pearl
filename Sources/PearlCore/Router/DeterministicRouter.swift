@@ -93,11 +93,11 @@ public final class DeterministicRouter: Sendable {
         }
         
         // 4. Volume Intent
-        if lower.contains("mute") || lower == "silence" || lower.contains("turn sound off") || lower.contains("sound off") {
-            return ResolvedIntent(toolName: "volume", arguments: ["level": "0"], confidence: 1.0)
-        }
         if lower.contains("unmute") {
             return ResolvedIntent(toolName: "volume", arguments: ["level": "30"], confidence: 1.0)
+        }
+        if lower.contains("mute") || lower == "silence" || lower.contains("turn sound off") || lower.contains("sound off") {
+            return ResolvedIntent(toolName: "volume", arguments: ["level": "0"], confidence: 1.0)
         }
         if let vol = extractVolumeLevel(from: lower) {
             return ResolvedIntent(toolName: "volume", arguments: ["level": "\(vol)"], confidence: 1.0)
@@ -133,15 +133,19 @@ public final class DeterministicRouter: Sendable {
             let text = String(cleaned.dropFirst(13)).trimmingCharacters(in: .whitespaces)
             return ResolvedIntent(toolName: "reminder", arguments: ["title": text], confidence: 0.95)
         }
-        if lower.hasPrefix("create reminder ") || lower.hasPrefix("add reminder ") {
+        if lower.hasPrefix("create reminder ") {
             let text = String(cleaned.dropFirst(16)).trimmingCharacters(in: .whitespaces)
+            return ResolvedIntent(toolName: "reminder", arguments: ["title": text], confidence: 0.95)
+        }
+        if lower.hasPrefix("add reminder ") {
+            let text = String(cleaned.dropFirst(13)).trimmingCharacters(in: .whitespaces)
             return ResolvedIntent(toolName: "reminder", arguments: ["title": text], confidence: 0.95)
         }
         
         return nil
     }
     
-    private func cleanUtterance(_ utterance: String) -> String {
+    func cleanUtterance(_ utterance: String) -> String {
         var text = utterance.trimmingCharacters(in: .whitespacesAndNewlines)
         let prefixes = [
             "hey pearl, ", "hey pearl ", "pearl, ", "pearl ",
@@ -159,10 +163,15 @@ public final class DeterministicRouter: Sendable {
                 }
             }
         }
-        let suffixes = [" please", ", please"]
-        for s in suffixes {
-            if text.lowercased().hasSuffix(s) {
-                text = String(text.dropLast(s.count)).trimmingCharacters(in: .whitespacesAndNewlines)
+        let suffixes = [", please", " please"]
+        var changedSuffix = true
+        while changedSuffix {
+            changedSuffix = false
+            for s in suffixes {
+                if text.lowercased().hasSuffix(s) {
+                    text = String(text.dropLast(s.count)).trimmingCharacters(in: .whitespacesAndNewlines)
+                    changedSuffix = true
+                }
             }
         }
         return text

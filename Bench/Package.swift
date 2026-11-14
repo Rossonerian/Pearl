@@ -22,7 +22,7 @@ let package = Package(
         .executable(name: "mcp_bench", targets: ["MCPVerification"])
     ],
     dependencies: [
-        .package(path: "..")
+        .package(name: "Pearl", path: "..")
     ],
     targets: [
         .target(
