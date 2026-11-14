@@ -92,7 +92,7 @@ public final class AppleFMProvider: ModelProvider, @unchecked Sendable {
                 _ = try ToolTierEnforcer.validateToolCall(toolCall, providerIsLocal: true)
                 
                 let badge = HUDTurnBadge(
-                    label: "on device",
+                    label: "",
                     provider: name,
                     modelID: modelID,
                     isLocal: true,
@@ -136,7 +136,7 @@ public final class AppleFMProvider: ModelProvider, @unchecked Sendable {
             }
             
             let badge = HUDTurnBadge(
-                label: "on device",
+                label: "",
                 provider: name,
                 modelID: modelID,
                 isLocal: true,

@@ -29,10 +29,12 @@ public final class TTLCache<Key: Hashable & Sendable, Value: Sendable>: @uncheck
         var value: Value
         var expiresAt: Date
         var lastAccessed: Date
+        var accessSequence: UInt64
     }
     
     private let lock = NSLock()
     private var storage: [Key: Entry] = [:]
+    private var sequenceCounter: UInt64 = 0
     public let maxSize: Int
     public let ttlSeconds: TimeInterval
     private var hits: Int = 0
@@ -59,8 +61,10 @@ public final class TTLCache<Key: Hashable & Sendable, Value: Sendable>: @uncheck
             return nil
         }
         
+        sequenceCounter += 1
         var updated = entry
         updated.lastAccessed = now
+        updated.accessSequence = sequenceCounter
         storage[key] = updated
         hits += 1
         return updated.value
@@ -73,9 +77,10 @@ public final class TTLCache<Key: Hashable & Sendable, Value: Sendable>: @uncheck
         let now = Date()
         let effectiveTTL = ttl ?? ttlSeconds
         let expiresAt = now.addingTimeInterval(effectiveTTL)
+        sequenceCounter += 1
         
         if storage[key] != nil {
-            storage[key] = Entry(value: value, expiresAt: expiresAt, lastAccessed: now)
+            storage[key] = Entry(value: value, expiresAt: expiresAt, lastAccessed: now, accessSequence: sequenceCounter)
             return
         }
         
@@ -88,15 +93,15 @@ public final class TTLCache<Key: Hashable & Sendable, Value: Sendable>: @uncheck
                 storage.removeValue(forKey: k)
             }
             
-            // If still at capacity, evict the least recently accessed (LRU) entry
+            // If still at capacity, evict the least recently accessed (LRU) entry deterministically
             if storage.count >= maxSize {
-                if let lruKey = storage.min(by: { $0.value.lastAccessed < $1.value.lastAccessed })?.key {
+                if let lruKey = storage.min(by: { $0.value.accessSequence < $1.value.accessSequence })?.key {
                     storage.removeValue(forKey: lruKey)
                 }
             }
         }
         
-        storage[key] = Entry(value: value, expiresAt: expiresAt, lastAccessed: now)
+        storage[key] = Entry(value: value, expiresAt: expiresAt, lastAccessed: now, accessSequence: sequenceCounter)
     }
     
     public func remove(_ key: Key) {

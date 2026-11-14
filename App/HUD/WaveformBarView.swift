@@ -53,13 +53,15 @@ public final class WaveformBarView: NSView {
         let totalWidth = bounds.width
         let totalHeight = bounds.height
         let barSpacing: CGFloat = 4.0
-        let barWidth: CGFloat = max(2.0, (totalWidth - (CGFloat(barCount - 1) * barSpacing)) / CGFloat(barCount))
+        let barWidth: CGFloat = 3.0
+        let groupWidth = (CGFloat(barCount) * barWidth) + (CGFloat(max(0, barCount - 1)) * barSpacing)
+        let startX = max(0.0, (totalWidth - groupWidth) / 2.0)
         let minHeight: CGFloat = 4.0
         
         let isHighContrast = NSWorkspace.shared.accessibilityDisplayShouldIncreaseContrast
         
         for i in 0..<barCount {
-            let barX = CGFloat(i) * (barWidth + barSpacing)
+            let barX = startX + CGFloat(i) * (barWidth + barSpacing)
             let barH = max(minHeight, totalHeight * levels[i])
             let barY = (totalHeight - barH) / 2.0
             
@@ -67,8 +69,9 @@ public final class WaveformBarView: NSView {
             let path = CGPath(roundedRect: barRect, cornerWidth: barWidth / 2.0, cornerHeight: barWidth / 2.0, transform: nil)
             
             if isThinking {
-                let alpha = isHighContrast ? 0.95 : (0.50 + 0.50 * levels[i])
-                context.setFillColor(CGColor(red: 0.60, green: 0.40, blue: 0.95, alpha: alpha))
+                // Warm champagne-amber thinking harmonic (DESIGN.md)
+                let alpha = isHighContrast ? 0.96 : (0.55 + 0.42 * levels[i])
+                context.setFillColor(CGColor(red: 0.96, green: 0.72, blue: 0.30, alpha: alpha))
             } else {
                 let alpha = isHighContrast ? 1.0 : (0.60 + 0.40 * levels[i])
                 context.setFillColor(CGColor(red: 0.95, green: 0.95, blue: 0.98, alpha: alpha))

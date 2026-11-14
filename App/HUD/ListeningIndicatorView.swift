@@ -8,7 +8,7 @@ import AppKit
 /// static fallback when macOS Reduced Motion is enabled.
 public final class ListeningIndicatorView: NSView {
     public var barCount: Int = 5
-    public var levels: [CGFloat] = Array(repeating: 0.15, count: 5)
+    public var levels: [CGFloat] = [0.18, 0.30, 0.45, 0.30, 0.18]
     public var isThinking: Bool = false
     public var phase: CGFloat = 0.0
     
@@ -32,8 +32,8 @@ public final class ListeningIndicatorView: NSView {
     // MARK: - 60 Hz Animation Driving
     
     public func startThinkingAnimation() {
+        invalidateTimer()
         isThinking = true
-        stopAnimation()
         
         // Strictly respect macOS Reduced Motion
         if NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
@@ -50,8 +50,8 @@ public final class ListeningIndicatorView: NSView {
     }
     
     public func updateAudioLevel(_ normalized: CGFloat) {
+        invalidateTimer()
         isThinking = false
-        stopAnimation()
         
         let clamped = max(0.08, min(1.0, normalized))
         for i in 0..<barCount {
@@ -63,6 +63,13 @@ public final class ListeningIndicatorView: NSView {
     }
     
     public func stopAnimation() {
+        invalidateTimer()
+        isThinking = false
+        levels = [0.18, 0.30, 0.45, 0.30, 0.18]
+        needsDisplay = true
+    }
+    
+    private func invalidateTimer() {
         animationTimer?.invalidate()
         animationTimer = nil
     }
@@ -86,13 +93,15 @@ public final class ListeningIndicatorView: NSView {
         let totalWidth = bounds.width
         let totalHeight = bounds.height
         let barSpacing: CGFloat = 4.0
-        let barWidth: CGFloat = max(2.5, (totalWidth - (CGFloat(barCount - 1) * barSpacing)) / CGFloat(barCount))
+        let barWidth: CGFloat = 3.0
+        let groupWidth = (CGFloat(barCount) * barWidth) + (CGFloat(max(0, barCount - 1)) * barSpacing)
+        let startX = max(0.0, (totalWidth - groupWidth) / 2.0)
         let minHeight: CGFloat = 4.0
         
         let isHighContrast = NSWorkspace.shared.accessibilityDisplayShouldIncreaseContrast
         
         for i in 0..<barCount {
-            let barX = CGFloat(i) * (barWidth + barSpacing)
+            let barX = startX + CGFloat(i) * (barWidth + barSpacing)
             let barH = max(minHeight, totalHeight * levels[i])
             let barY = (totalHeight - barH) / 2.0
             
@@ -105,12 +114,12 @@ public final class ListeningIndicatorView: NSView {
             )
             
             if isThinking {
-                // Violet-luminescence thinking wave
-                let alpha: CGFloat = isHighContrast ? 0.95 : (0.55 + 0.45 * levels[i])
-                context.setFillColor(CGColor(red: 0.65, green: 0.45, blue: 0.95, alpha: alpha))
+                // Warm champagne-amber thinking harmonic (DESIGN.md Precision Hardware Instrument)
+                let alpha: CGFloat = isHighContrast ? 0.96 : (0.58 + 0.40 * levels[i])
+                context.setFillColor(CGColor(red: 0.96, green: 0.72, blue: 0.30, alpha: alpha))
             } else {
-                // Crisp white active waveform
-                let alpha: CGFloat = isHighContrast ? 1.0 : (0.45 + 0.55 * levels[i])
+                // Crisp white active/standby waveform
+                let alpha: CGFloat = isHighContrast ? 1.0 : (0.50 + 0.48 * levels[i])
                 context.setFillColor(CGColor(red: 1.0, green: 1.0, blue: 1.0, alpha: alpha))
             }
             

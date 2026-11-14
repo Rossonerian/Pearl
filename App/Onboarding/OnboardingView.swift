@@ -19,7 +19,7 @@ public final class OnboardingViewModel {
     public init() {}
 }
 
-/// SwiftUI Onboarding Flow for Pearl V2.
+/// SwiftUI Onboarding Flow for Pearl 3.2.0.
 /// Guides the user through choosing an execution brain, hotkey setup,
 /// TCC permissions, and verifies zero default personal data collection.
 public struct OnboardingView: View {
@@ -27,7 +27,7 @@ public struct OnboardingView: View {
     public var onFinish: (() -> Void)?
     
     public enum BrainChoice: String, CaseIterable, Identifiable {
-        case appleOnDevice = "Apple On-Device Intelligence"
+        case appleOnDevice = "Apple Silicon Neural Engine"
         case localWeights = "Local Open-Weights (MLX / Ollama)"
         case cloudBYO = "Cloud Frontier (BYO API Key)"
         
@@ -36,11 +36,11 @@ public struct OnboardingView: View {
         public var description: String {
             switch self {
             case .appleOnDevice:
-                return "100% private on-device Foundation Models running on Apple Silicon Neural Engine. 0 network calls, 0 token cost."
+                return "Private Foundation Models accelerated by Apple Silicon Neural Engine. Zero network calls, zero token cost."
             case .localWeights:
-                return "Run local open models (Qwen 2.5 1.5B / Llama 3.2 3B) via MLX or Ollama. Complete offline autonomy."
+                return "Run quantized open models (Qwen 2.5 1.5B / Llama 3.2 3B) via MLX or Ollama with complete offline autonomy."
             case .cloudBYO:
-                return "Fast response via Anthropic or OpenAI. Direct HTTPS to your provider endpoint using your personal API key."
+                return "Frontier reasoning via Anthropic or OpenAI over direct HTTPS using your personal API key."
             }
         }
         
@@ -48,7 +48,7 @@ public struct OnboardingView: View {
             switch self {
             case .appleOnDevice: return "Recommended (Fastest)"
             case .localWeights: return "Offline"
-            case .cloudBYO: return "Full Capabilities"
+            case .cloudBYO: return "Cloud Escalation"
             }
         }
     }
@@ -75,7 +75,7 @@ public struct OnboardingView: View {
                 }
                 Spacer()
                 Text("Step \(state.currentStep + 1) of 4")
-                    .font(.caption)
+                    .font(.system(.caption, design: .monospaced).monospacedDigit())
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
                     .background(Color.secondary.opacity(0.15))
@@ -143,9 +143,9 @@ public struct OnboardingView: View {
     private var stepPhilosophyAndBrain: some View {
         VStack(alignment: .leading, spacing: 16) {
             VStack(alignment: .leading, spacing: 6) {
-                Text("Assistant Philosophy")
+                Text("Assistant Architecture")
                     .font(.headline)
-                Text("Pearl is built with **zero companion persona**: warm, concise, and focused strictly on task completion. It has **zero telemetry**, zero third-party analytic trackers, and **zero default personal data**.")
+                Text("Pearl pairs deterministic local control with switchable tactical personas (**Executive**, **Ultron**, **Jarvis**), strictly bounded permissions, **zero telemetry**, and **zero default cloud tracking**.")
                     .font(.subheadline)
                     .foregroundColor(.secondary)
             }

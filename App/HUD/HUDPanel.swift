@@ -8,12 +8,12 @@ import AppKit
 public final class HUDPanel: NSPanel {
     public let hudView: HUDView
     
-    // Geometry specifications
-    private let standardWidth: CGFloat = 360.0
-    private let standardHeight: CGFloat = 46.0
-    private let confirmationWidth: CGFloat = 480.0
-    private let confirmationHeight: CGFloat = 50.0
-    private let expandedHistoryHeight: CGFloat = 280.0
+    // Geometry specifications (Precision Hardware Instrument V3.2)
+    private let standardWidth: CGFloat = 400.0
+    private let standardHeight: CGFloat = 48.0
+    private let confirmationWidth: CGFloat = 460.0
+    private let confirmationHeight: CGFloat = 56.0
+    private let expandedHistoryHeight: CGFloat = 310.0
     private let expandedHistoryWidth: CGFloat = 420.0
     
     // Auto-leave lifecycle
@@ -103,11 +103,11 @@ public final class HUDPanel: NSPanel {
     
     public func showPill(text: String = "Pearl standing by", thinking: Bool = false, tierBadge: String? = nil, isLocal: Bool = true) {
         hudView.setStatusText(text)
-        if let badge = tierBadge {
-            hudView.setTierBadge(badge, isLocal: isLocal)
-        }
+        hudView.setTierBadge(tierBadge ?? "", isLocal: isLocal)
         if thinking {
             hudView.startThinkingAnimation()
+        } else {
+            hudView.stopAnimation()
         }
         syncWindowFrameToState(animated: false)
         orderFront(nil)
@@ -217,10 +217,12 @@ public final class HUDPanel: NSPanel {
         isLocal: Bool = true,
         latencyMs: Double? = nil
     ) {
+        let lower = (badgeLabel ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let cleanedBadge: String? = (isLocal || lower.isEmpty || lower == "on device" || lower == "ready" || lower == "t1 local") ? nil : badgeLabel
         let record = HUDTurnRecord(
             userText: userUtterance,
             assistantText: assistantResponse,
-            badgeLabel: badgeLabel,
+            badgeLabel: cleanedBadge,
             isLocal: isLocal,
             latencyMs: latencyMs
         )

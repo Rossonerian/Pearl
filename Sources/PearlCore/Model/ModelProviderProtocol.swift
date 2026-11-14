@@ -70,7 +70,7 @@ public struct ModelResponse: Sendable {
         self.modelID = modelID
         self.isLocal = isLocal
         self.badge = badge ?? HUDTurnBadge(
-            label: isLocal ? "on device" : "sent to \(providerName)",
+            label: isLocal ? "" : "cloud · \(providerName)",
             provider: providerName,
             modelID: modelID,
             isLocal: isLocal

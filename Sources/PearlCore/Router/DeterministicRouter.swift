@@ -51,7 +51,7 @@ public final class DeterministicRouter: Sendable {
         // 2. High-confidence deterministic rule resolution
         if let intent = resolve(utterance: trimmed) {
             let badge = HUDTurnBadge(
-                label: "on device",
+                label: "",
                 provider: "Deterministic",
                 modelID: "regex",
                 isLocal: true,

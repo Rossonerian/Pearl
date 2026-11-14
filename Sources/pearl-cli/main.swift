@@ -690,6 +690,13 @@ case "abort":
         KillSwitch.shared.trigger(reason: "Triggered via CLI abort (offline)")
         print("Emergency abort signaled locally.")
     }
+case "toggle_history", "history":
+    let result = sendIPC(command: "toggle_history")
+    if let resp = result.response {
+        print(resp.message)
+    } else {
+        exit(1)
+    }
 case "quit":
     let result = sendIPC(command: "quit")
     if let resp = result.response {

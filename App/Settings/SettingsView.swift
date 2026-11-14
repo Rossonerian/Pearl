@@ -28,7 +28,7 @@ public final class SettingsViewModel {
     public init() {}
 }
 
-/// Comprehensive SwiftUI Settings Interface for Pearl V2.
+/// Native SwiftUI Settings Interface for Pearl 3.2.0.
 /// Controls execution tiers, model routing, spend caps, memory export/erasure,
 /// and security policy inspection.
 public struct SettingsView: View {
@@ -62,7 +62,7 @@ public struct SettingsView: View {
                 }
                 .tag(3)
         }
-        .frame(width: 580, height: 460)
+        .frame(width: 600, height: 480)
         .padding()
         .onAppear {
             loadConfig()
@@ -73,18 +73,19 @@ public struct SettingsView: View {
     // MARK: - Tab 1: General
     private var generalTab: some View {
         Form {
-            Section(header: Text("Voice & Hotkey Activation")) {
-                LabeledContent("Global Hotkey:") {
+            Section(header: Label("Voice & Hotkey Activation", systemImage: "keyboard")) {
+                LabeledContent("Global Hotkey") {
                     Text("⌃⌥Space (Ctrl + Opt + Space)")
-                        .font(.system(.body, design: .monospaced))
+                        .font(.system(.body, design: .monospaced).monospacedDigit())
+                        .foregroundColor(.primary)
                 }
-                Text("Triggers the notch HUD floating pill across all spaces and full-screen apps.")
+                Text("Summons the floating instrument HUD capsule across all spaces and full-screen apps.")
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
             
-            Section(header: Text("Persona & Talk-Back")) {
-                Picker("Assistant Persona:", selection: Binding(
+            Section(header: Label("Persona & Talk-Back", systemImage: "person.wave.2")) {
+                Picker("Assistant Persona", selection: Binding(
                     get: { state.activePersona },
                     set: { newValue in
                         state.activePersona = newValue
@@ -100,22 +101,24 @@ public struct SettingsView: View {
                 }
             }
             
-            Section(header: Text("Updates & Distribution")) {
+            Section(header: Label("Updates & Distribution", systemImage: "arrow.triangle.2.circlepath")) {
                 Toggle("Automatically check for updates via Sparkle", isOn: Binding(get: { state.autoCheckUpdates }, set: { state.autoCheckUpdates = $0 }))
-                Text("Updates are verified via EdDSA cryptographic signatures. In accordance with Pearl's zero-telemetry policy, system hardware profiling is disabled.")
+                Text("Updates are verified via EdDSA cryptographic signatures. Hardware profiling and telemetry are permanently disabled.")
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
             
-            Section(header: Text("Diagnostic Info")) {
-                LabeledContent("App Version:") {
-                    Text("Pearl 3.2.0 (Ultron Workflow Edition)")
+            Section(header: Label("Diagnostic Info", systemImage: "gauge.with.needle")) {
+                LabeledContent("App Version") {
+                    Text("Pearl 3.2.0 (Ultron Workflow)")
+                        .font(.system(.body, design: .monospaced).monospacedDigit())
                 }
-                LabeledContent("Host Architecture:") {
+                LabeledContent("Host Architecture") {
                     Text("Apple Silicon (A18 Pro / M-Series)")
                 }
-                LabeledContent("IPC Transport:") {
+                LabeledContent("IPC Transport") {
                     Text("Local Unix Domain Socket (0 TCP listeners)")
+                        .font(.system(.callout, design: .monospaced).monospacedDigit())
                         .foregroundColor(.green)
                 }
             }
@@ -126,27 +129,30 @@ public struct SettingsView: View {
     // MARK: - Tab 2: Tiers & Models
     private var tiersAndModelsTab: some View {
         Form {
-            Section(header: Text("Execution Tiers")) {
+            Section(header: Label("Execution Tiers", systemImage: "bolt.shield")) {
                 Toggle("Tier 1: Deterministic Actions (< 1 ms)", isOn: Binding(get: { state.deterministicTierEnabled }, set: { state.deterministicTierEnabled = $0 }))
-                Text("Direct native Swift CoreAudio, IOKit, and NSWorkspace actions. Zero token cost, zero LLM latency.")
+                Text("Direct native Swift CoreAudio, IOKit, and NSWorkspace actions. Zero token cost and sub-millisecond latency.")
                     .font(.caption)
                     .foregroundColor(.secondary)
                 
-                Toggle("Tier 2: On-Device Foundation Models (< 50 ms)", isOn: Binding(get: { state.localLLMTierEnabled }, set: { state.localLLMTierEnabled = $0 }))
-                Text("Private on-device inference via Apple SystemLanguageModel or MLX open-weights.")
+                Toggle("Tier 2: Local Foundation Models (< 50 ms)", isOn: Binding(get: { state.localLLMTierEnabled }, set: { state.localLLMTierEnabled = $0 }))
+                Text("Private local inference via Apple Neural Engine or quantized MLX open-weights.")
                     .font(.caption)
                     .foregroundColor(.secondary)
                 
                 Toggle("Tier 3: Cloud Frontier Escalation", isOn: Binding(get: { state.cloudTierEnabled }, set: { state.cloudTierEnabled = $0 }))
-                Text("Escalates complex, ambiguous multi-step reasoning queries to cloud provider.")
+                Text("Routes complex multi-step reasoning queries to your configured frontier model endpoint.")
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
             
-            Section(header: Text("Model Configuration")) {
-                TextField("Fast Model:", text: Binding(get: { state.fastModelID }, set: { state.fastModelID = $0 }))
-                TextField("Escalation Model:", text: Binding(get: { state.escalationModelID }, set: { state.escalationModelID = $0 }))
-                TextField("Provider Endpoint:", text: Binding(get: { state.modelEndpoint }, set: { state.modelEndpoint = $0 }))
+            Section(header: Label("Model Configuration", systemImage: "slider.horizontal.3")) {
+                TextField("Fast Model", text: Binding(get: { state.fastModelID }, set: { state.fastModelID = $0 }))
+                    .font(.system(.body, design: .monospaced))
+                TextField("Escalation Model", text: Binding(get: { state.escalationModelID }, set: { state.escalationModelID = $0 }))
+                    .font(.system(.body, design: .monospaced))
+                TextField("Provider Endpoint", text: Binding(get: { state.modelEndpoint }, set: { state.modelEndpoint = $0 }))
+                    .font(.system(.body, design: .monospaced))
                 
                 Button("Save Model Configuration") {
                     saveConfig()
@@ -161,29 +167,32 @@ public struct SettingsView: View {
     // MARK: - Tab 3: Spend Caps
     private var spendCapsTab: some View {
         Form {
-            Section(header: Text("Hard Budget Protection")) {
+            Section(header: Label("Hard Budget Protection", systemImage: "shield.lefthalf.filled")) {
                 HStack {
-                    Text("Monthly Spend Cap:")
+                    Text("Monthly Spend Cap")
                     Spacer()
                     Text(String(format: "$%.2f USD", state.monthlySpendCap))
-                        .fontWeight(.bold)
+                        .font(.system(.body, design: .monospaced).monospacedDigit())
+                        .fontWeight(.semibold)
                 }
                 Slider(value: Binding(get: { state.monthlySpendCap }, set: { state.monthlySpendCap = $0 }), in: 1.0...50.0, step: 1.0)
-                Text("When cumulative monthly spend reaches this threshold, Pearl strictly falls back to Tier 2 on-device models.")
+                Text("When cumulative monthly cloud spend reaches this threshold, Pearl strictly locks execution to local Tier 1–2 engines.")
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
             
-            Section(header: Text("Turn Limits")) {
+            Section(header: Label("Turn Limits", systemImage: "gauge.medium")) {
                 Stepper("Max Tokens Per Turn: \(state.maxTokensPerTurn)", value: Binding(get: { state.maxTokensPerTurn }, set: { state.maxTokensPerTurn = $0 }), in: 512...8192, step: 512)
+                    .font(.system(.body).monospacedDigit())
                 
                 HStack {
-                    Text("Current Month Estimated Spend:")
+                    Text("Current Month Estimated Spend")
                     Spacer()
                     Text(String(format: "$%.4f / $%.2f", state.currentSpendMonth, state.monthlySpendCap))
+                        .font(.system(.body, design: .monospaced).monospacedDigit())
                         .foregroundColor(.secondary)
                 }
-                ProgressView(value: state.currentSpendMonth, total: state.monthlySpendCap)
+                ProgressView(value: min(state.currentSpendMonth, state.monthlySpendCap), total: max(1.0, state.monthlySpendCap))
             }
         }
         .formStyle(.grouped)
@@ -192,12 +201,14 @@ public struct SettingsView: View {
     // MARK: - Tab 4: Memory & Privacy
     private var memoryAndPrivacyTab: some View {
         Form {
-            Section(header: Text("Inspectable Memory Store")) {
-                LabeledContent("Active Learned Facts:") {
+            Section(header: Label("Inspectable Memory Store", systemImage: "externaldrive.badge.checkmark")) {
+                LabeledContent("Active Learned Facts") {
                     Text("\(state.factCount) facts")
+                        .font(.system(.body, design: .monospaced).monospacedDigit())
                 }
-                LabeledContent("Profile Size:") {
+                LabeledContent("Profile Size") {
                     Text("\(state.profileByteCount) bytes (Schema v\(state.schemaVersion))")
+                        .font(.system(.body, design: .monospaced).monospacedDigit())
                 }
                 Text("All memory is stored locally in human-readable Markdown format with SQLite FTS5 search. No cloud syncing.")
                     .font(.caption)

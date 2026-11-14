@@ -354,7 +354,7 @@ public final class AssistantPipeline: @unchecked Sendable {
                 do {
                     let toolRes = try await policyEngine.execute(tool: tool, args: intent.arguments, context: toolContext)
                     let badge = HUDTurnBadge(
-                        label: activeArchetype?.rawValue ?? "on device",
+                        label: activeArchetype?.rawValue ?? "",
                         provider: "Deterministic",
                         modelID: intent.toolName,
                         isLocal: true,
