@@ -16,6 +16,10 @@ public final class HUDPanel: NSPanel {
     private let expandedHistoryHeight: CGFloat = 280.0
     private let expandedHistoryWidth: CGFloat = 420.0
     
+    // Auto-leave lifecycle
+    private var autoLeaveWorkItem: DispatchWorkItem?
+    private var appSwitchObserver: NSObjectProtocol?
+    
     public init() {
         let screenRect = NSScreen.main?.visibleFrame ?? NSScreen.main?.frame ?? NSRect(x: 0, y: 0, width: 1470, height: 956)
         let pillX = (screenRect.width - standardWidth) / 2.0
@@ -111,12 +115,59 @@ public final class HUDPanel: NSPanel {
     }
     
     public func hidePill() {
+        cancelAutoLeave()
         hudView.stopAnimation()
         hudView.setHistoryExpanded(false)
         hudView.dismissToolConfirmation()
         syncWindowFrameToState(animated: false)
         orderOut(nil)
         CATransaction.flush()
+    }
+    
+    // MARK: - Auto-Leave Lifecycle
+    
+    /// Schedules automatic departure / dismissal of the HUD capsule after specified duration and/or app switch.
+    public func scheduleAutoLeave(after seconds: TimeInterval, dismissOnAppSwitch: Bool) {
+        cancelAutoLeave()
+        
+        if dismissOnAppSwitch {
+            appSwitchObserver = NSWorkspace.shared.notificationCenter.addObserver(
+                forName: NSWorkspace.didActivateApplicationNotification,
+                object: nil,
+                queue: .main
+            ) { [weak self] _ in
+                guard let self = self else { return }
+                if !self.hudView.isConfirmationActive {
+                    self.hidePill()
+                }
+            }
+        }
+        
+        if seconds > 0 {
+            let workItem = DispatchWorkItem { [weak self] in
+                guard let self = self else { return }
+                if !self.hudView.isConfirmationActive && !self.hudView.isHistoryExpanded {
+                    self.hidePill()
+                }
+            }
+            self.autoLeaveWorkItem = workItem
+            DispatchQueue.main.asyncAfter(deadline: .now() + seconds, execute: workItem)
+        }
+    }
+    
+    /// Cancels any scheduled auto-leave work item and unregisters the application activation observer.
+    public func cancelAutoLeave() {
+        autoLeaveWorkItem?.cancel()
+        autoLeaveWorkItem = nil
+        
+        if let observer = appSwitchObserver {
+            NSWorkspace.shared.notificationCenter.removeObserver(observer)
+            appSwitchObserver = nil
+        }
+    }
+    
+    deinit {
+        cancelAutoLeave()
     }
     
     // MARK: - Interactive Tool Confirmation

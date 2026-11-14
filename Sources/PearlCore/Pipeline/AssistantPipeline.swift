@@ -50,6 +50,7 @@ public struct AssistantResponse: Sendable {
     public let latencyMs: Double
     public let toolResults: [ToolResult]
     public let memoryUpdated: Bool
+    public let outputDecision: OutputDecision?
     
     public init(
         id: String,
@@ -59,7 +60,8 @@ public struct AssistantResponse: Sendable {
         badge: HUDTurnBadge,
         latencyMs: Double,
         toolResults: [ToolResult] = [],
-        memoryUpdated: Bool = false
+        memoryUpdated: Bool = false,
+        outputDecision: OutputDecision? = nil
     ) {
         self.id = id
         self.success = success
@@ -69,6 +71,7 @@ public struct AssistantResponse: Sendable {
         self.latencyMs = latencyMs
         self.toolResults = toolResults
         self.memoryUpdated = memoryUpdated
+        self.outputDecision = outputDecision
     }
 }
 
@@ -149,22 +152,36 @@ public final class AssistantPipeline: @unchecked Sendable {
         // 1 & 2. Validate input
         let trimmed = request.utterance.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
+            let decision = OutputDirector.shared.decide(
+                responseText: "Pearl standing by.",
+                origin: request.origin
+            )
             return AssistantResponse(
                 id: request.id,
                 success: true,
                 responseText: "Pearl standing by.",
+                speechText: decision.spokenText ?? "",
                 badge: HUDTurnBadge(label: "ready", provider: "Pearl", modelID: "idle", isLocal: true),
-                latencyMs: elapsedMs()
+                latencyMs: elapsedMs(),
+                outputDecision: decision
             )
         }
         
         if trimmed.count > 8192 {
+            let resp = "Request rejected: input length exceeds maximum 8192 characters."
+            let decision = OutputDirector.shared.decide(
+                responseText: resp,
+                origin: request.origin,
+                isError: true
+            )
             return AssistantResponse(
                 id: request.id,
                 success: false,
-                responseText: "Request rejected: input length exceeds maximum 8192 characters.",
+                responseText: resp,
+                speechText: decision.spokenText ?? "",
                 badge: HUDTurnBadge(label: "error", provider: "Validation", modelID: "guard", isLocal: true),
-                latencyMs: elapsedMs()
+                latencyMs: elapsedMs(),
+                outputDecision: decision
             )
         }
         
@@ -177,12 +194,19 @@ public final class AssistantPipeline: @unchecked Sendable {
         let negationPatterns = ["don't", "dont", "do not", "never mind", "cancel that", "abort", "ignore that", "stop"]
         for neg in negationPatterns {
             if lower == neg || lower.hasPrefix(neg + " ") || lower.hasSuffix(" " + neg) || lower.contains(" " + neg + " ") {
+                let resp = "Action cancelled."
+                let decision = OutputDirector.shared.decide(
+                    responseText: resp,
+                    origin: request.origin
+                )
                 return AssistantResponse(
                     id: request.id,
                     success: true,
-                    responseText: "Action cancelled.",
+                    responseText: resp,
+                    speechText: decision.spokenText ?? "",
                     badge: HUDTurnBadge(label: "cancelled", provider: "Guard", modelID: "negation", isLocal: true),
-                    latencyMs: elapsedMs()
+                    latencyMs: elapsedMs(),
+                    outputDecision: decision
                 )
             }
         }
@@ -212,22 +236,37 @@ public final class AssistantPipeline: @unchecked Sendable {
                         latencyMs: duration
                     )
                     await sessionManager.recordTurn(turn, sessionID: request.sessionID)
+                    let resp = "Remembered: '\(memoryFact)'."
+                    let decision = OutputDirector.shared.decide(
+                        responseText: resp,
+                        origin: request.origin
+                    )
                     return AssistantResponse(
                         id: request.id,
                         success: true,
-                        responseText: "Remembered: '\(memoryFact)'.",
+                        responseText: resp,
+                        speechText: decision.spokenText ?? "",
                         badge: badge,
                         latencyMs: duration,
-                        memoryUpdated: true
+                        memoryUpdated: true,
+                        outputDecision: decision
                     )
                 } catch {
                     let duration = elapsedMs()
+                    let resp = "Could not save fact: \(error.localizedDescription)"
+                    let decision = OutputDirector.shared.decide(
+                        responseText: resp,
+                        origin: request.origin,
+                        isError: true
+                    )
                     return AssistantResponse(
                         id: request.id,
                         success: false,
-                        responseText: "Could not save fact: \(error.localizedDescription)",
+                        responseText: resp,
+                        speechText: decision.spokenText ?? "",
                         badge: HUDTurnBadge(label: "error", provider: "MemoryStore", modelID: "gate", isLocal: true),
-                        latencyMs: duration
+                        latencyMs: duration,
+                        outputDecision: decision
                     )
                 }
             }
@@ -288,13 +327,24 @@ public final class AssistantPipeline: @unchecked Sendable {
                     )
                     await sessionManager.recordTurn(turn, sessionID: request.sessionID)
                     
+                    let isConfirmation = toolRes.message.localizedCaseInsensitiveContains("confirmation required") ||
+                                         toolRes.message.localizedCaseInsensitiveContains("user confirmation required")
+                    let decision = OutputDirector.shared.decide(
+                        responseText: toolRes.message,
+                        origin: request.origin,
+                        isError: !toolRes.success && !isConfirmation,
+                        requiresConfirmation: isConfirmation
+                    )
+                    
                     return AssistantResponse(
                         id: request.id,
                         success: toolRes.success,
                         responseText: toolRes.message,
+                        speechText: decision.spokenText ?? "",
                         badge: badge,
                         latencyMs: duration,
-                        toolResults: [toolRes]
+                        toolResults: [toolRes],
+                        outputDecision: decision
                     )
                 } catch {
                     let duration = elapsedMs()
@@ -311,22 +361,38 @@ public final class AssistantPipeline: @unchecked Sendable {
                     )
                     await sessionManager.recordTurn(errorTurn, sessionID: request.sessionID)
                     
+                    let errorMsg = "Execution error: \(error.localizedDescription)"
+                    let decision = OutputDirector.shared.decide(
+                        responseText: errorMsg,
+                        origin: request.origin,
+                        isError: true
+                    )
                     return AssistantResponse(
                         id: request.id,
                         success: false,
-                        responseText: "Execution error: \(error.localizedDescription)",
+                        responseText: errorMsg,
+                        speechText: decision.spokenText ?? "",
                         badge: HUDTurnBadge(label: "error", provider: "PolicyEngine", modelID: intent.toolName, isLocal: true),
-                        latencyMs: duration
+                        latencyMs: duration,
+                        outputDecision: decision
                     )
                 }
             } else {
                 let duration = elapsedMs()
+                let errorMsg = "Tool '\(intent.toolName)' not registered."
+                let decision = OutputDirector.shared.decide(
+                    responseText: errorMsg,
+                    origin: request.origin,
+                    isError: true
+                )
                 return AssistantResponse(
                     id: request.id,
                     success: false,
-                    responseText: "Tool '\(intent.toolName)' not registered.",
+                    responseText: errorMsg,
+                    speechText: decision.spokenText ?? "",
                     badge: HUDTurnBadge(label: "error", provider: "ToolRegistry", modelID: "missing", isLocal: true),
-                    latencyMs: duration
+                    latencyMs: duration,
+                    outputDecision: decision
                 )
             }
         }
@@ -389,13 +455,25 @@ public final class AssistantPipeline: @unchecked Sendable {
             )
             await sessionManager.recordTurn(turn, sessionID: request.sessionID)
             
+            let isConfirmation = finalMessage.localizedCaseInsensitiveContains("confirmation required") ||
+                                 finalMessage.localizedCaseInsensitiveContains("user confirmation required") ||
+                                 summary.results.contains { $0.message.localizedCaseInsensitiveContains("confirmation required") }
+            let decision = OutputDirector.shared.decide(
+                responseText: finalMessage,
+                origin: request.origin,
+                isError: summary.toolCallsSucceeded == 0 && !modelRes.toolCalls.isEmpty && !isConfirmation,
+                requiresConfirmation: isConfirmation
+            )
+            
             return AssistantResponse(
                 id: request.id,
                 success: summary.toolCallsSucceeded > 0 || modelRes.toolCalls.isEmpty,
                 responseText: finalMessage,
+                speechText: decision.spokenText ?? "",
                 badge: modelRes.badge,
                 latencyMs: duration,
-                toolResults: summary.results
+                toolResults: summary.results,
+                outputDecision: decision
             )
         }
         
@@ -414,13 +492,23 @@ public final class AssistantPipeline: @unchecked Sendable {
         )
         await sessionManager.recordTurn(turn, sessionID: request.sessionID)
         
+        let isConfirmation = modelRes.content.localizedCaseInsensitiveContains("confirmation required") ||
+                             modelRes.content.localizedCaseInsensitiveContains("user confirmation required")
+        let decision = OutputDirector.shared.decide(
+            responseText: modelRes.content,
+            origin: request.origin,
+            requiresConfirmation: isConfirmation
+        )
+        
         return AssistantResponse(
             id: request.id,
             success: true,
             responseText: modelRes.content,
+            speechText: decision.spokenText ?? "",
             badge: modelRes.badge,
             latencyMs: duration,
-            toolResults: []
+            toolResults: [],
+            outputDecision: decision
         )
     }
     
