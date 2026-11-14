@@ -128,6 +128,11 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     
     private func registerNativeTools() {
         PearlToolsRegistry.registerAll(into: ToolRegistry.shared, catalog: CentralToolCatalog.shared)
+        let reg = ToolRegistry.shared
+        reg.register(ListTasksTool())
+        reg.register(CreateTaskTool())
+        reg.register(CompleteTaskTool())
+        reg.register(DeleteTaskTool())
     }
     
     private func toggleHUD() {
@@ -353,6 +358,15 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
             responseMessage = "Pearl daemon terminating"
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                 NSApplication.shared.terminate(nil)
+            }
+            
+        case "brief", "briefing":
+            do {
+                let briefing = try await BriefingEngine.shared.generateMorningBriefing()
+                responseMessage = briefing
+            } catch {
+                responseMessage = "Failed to generate briefing: \(error.localizedDescription)"
+                isSuccess = false
             }
             
         case "remember":

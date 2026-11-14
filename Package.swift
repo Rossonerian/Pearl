@@ -18,7 +18,10 @@ let package = Package(
     targets: [
         .target(
             name: "PearlCore",
-            path: "Sources/PearlCore"
+            path: "Sources/PearlCore",
+            linkerSettings: [
+                .linkedLibrary("sqlite3")
+            ]
         ),
         .target(
             name: "PearlTools",

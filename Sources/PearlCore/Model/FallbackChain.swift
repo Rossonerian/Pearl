@@ -110,6 +110,7 @@ public final class FallbackChain: Sendable {
         lines.append("• Battery status (\"check battery\")")
         lines.append("• App management (\"open Safari\", \"close Spotify\")")
         lines.append("• Reminders (\"remind me to...\")")
+        lines.append("• Tasks (\"list tasks\", \"create task buy milk\", \"complete task buy milk\")")
         lines.append("• Screenshots (\"take screenshot\", \"clean screenshots\")")
         lines.append("• Git status (\"git status\")")
         

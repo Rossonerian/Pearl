@@ -138,6 +138,25 @@ public final class DeterministicRouter: Sendable {
             return ResolvedIntent(toolName: "reminder", arguments: ["title": text], confidence: 0.95)
         }
         
+        // 9. Tasks & To-Dos
+        if lower == "list tasks" || lower == "my tasks" || lower == "show tasks" || lower == "show my tasks" || lower == "task list" || lower == "what are my tasks" {
+            return ResolvedIntent(toolName: "list_tasks", arguments: ["status": "pending"], confidence: 1.0)
+        }
+        if lower.hasPrefix("create task ") || lower.hasPrefix("add task ") || lower.hasPrefix("new task ") {
+            let prefixCount = lower.hasPrefix("create task ") ? 12 : (lower.hasPrefix("add task ") ? 9 : 9)
+            let title = String(cleaned.dropFirst(prefixCount)).trimmingCharacters(in: .whitespaces)
+            return ResolvedIntent(toolName: "create_task", arguments: ["title": title], confidence: 0.98)
+        }
+        if lower.hasPrefix("complete task ") || lower.hasPrefix("finish task ") {
+            let prefixCount = lower.hasPrefix("complete task ") ? 14 : 12
+            let id = String(cleaned.dropFirst(prefixCount)).trimmingCharacters(in: .whitespaces)
+            return ResolvedIntent(toolName: "complete_task", arguments: ["id": id], confidence: 0.98)
+        }
+        if lower.hasPrefix("delete task ") {
+            let id = String(cleaned.dropFirst(12)).trimmingCharacters(in: .whitespaces)
+            return ResolvedIntent(toolName: "delete_task", arguments: ["id": id], confidence: 0.98)
+        }
+        
         return nil
     }
     
