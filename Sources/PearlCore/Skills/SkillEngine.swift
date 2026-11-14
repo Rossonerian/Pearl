@@ -49,21 +49,200 @@ public enum SkillEngineError: Error, LocalizedError, Sendable {
     }
 }
 
+/// Blueprint template for built-in skills in the Pearl catalog.
+public struct CatalogSkillBlueprint: Codable, Sendable, Equatable {
+    public let name: String
+    public let category: String
+    public let trigger: String
+    public let description: String
+    public let steps: [String]
+    
+    public init(
+        name: String,
+        category: String,
+        trigger: String,
+        description: String,
+        steps: [String]
+    ) {
+        self.name = name
+        self.category = category
+        self.trigger = trigger
+        self.description = description
+        self.steps = steps
+    }
+}
+
 /// Actor orchestrating declarative Markdown user skills and multi-step macros.
 public actor SkillEngine {
     public static let shared = SkillEngine()
     
+    public static var defaultSkillsDirectory: URL {
+        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        return appSupport
+            .appendingPathComponent("Pearl", isDirectory: true)
+            .appendingPathComponent("skills", isDirectory: true)
+    }
+    
+    public static let builtInCatalog: [CatalogSkillBlueprint] = [
+        // Productivity (2)
+        CatalogSkillBlueprint(
+            name: "start-workday",
+            category: "Productivity",
+            trigger: "start my workday",
+            description: "Check system readiness, calendar events, and top pending tasks",
+            steps: ["check battery", "list tasks", "list calendar events"]
+        ),
+        CatalogSkillBlueprint(
+            name: "meeting-prep",
+            category: "Productivity",
+            trigger: "prep for my meeting",
+            description: "Prepare calendar context, urgent tasks, and clipboard preview",
+            steps: ["list calendar events", "list tasks", "read clipboard"]
+        ),
+        
+        // Research (2)
+        CatalogSkillBlueprint(
+            name: "topic-research",
+            category: "Research",
+            trigger: "research topic",
+            description: "Perform deep research on a specified topic using web searches and synthesis",
+            steps: ["search web for topic", "fetch top articles", "summarize findings"]
+        ),
+        CatalogSkillBlueprint(
+            name: "competitive-analysis",
+            category: "Research",
+            trigger: "analyze competitor",
+            description: "Track competitor updates, compare features, and compile briefing",
+            steps: ["search competitor announcements", "extract feature comparison", "save briefing note"]
+        ),
+        
+        // Writing (2)
+        CatalogSkillBlueprint(
+            name: "draft-newsletter",
+            category: "Writing",
+            trigger: "draft newsletter",
+            description: "Compile weekly highlights, format sections, and review tone",
+            steps: ["collect highlights", "draft sections", "review tone and format"]
+        ),
+        CatalogSkillBlueprint(
+            name: "release-notes",
+            category: "Writing",
+            trigger: "generate release notes",
+            description: "Collect recent git changes and draft structured release notes",
+            steps: ["fetch git log", "group changes by category", "format markdown release notes"]
+        ),
+        
+        // Coding (2)
+        CatalogSkillBlueprint(
+            name: "pr-review",
+            category: "Coding",
+            trigger: "review pull request",
+            description: "Review git changes, run local test suite, and summarize feedback",
+            steps: ["git status", "git diff", "swift test"]
+        ),
+        CatalogSkillBlueprint(
+            name: "clean-build",
+            category: "Coding",
+            trigger: "clean build project",
+            description: "Reset build caches, resolve dependencies, and compile target",
+            steps: ["swift package clean", "swift package resolve", "swift test"]
+        ),
+        
+        // System (2)
+        CatalogSkillBlueprint(
+            name: "system-health",
+            category: "System",
+            trigger: "check system health",
+            description: "Inspect battery, storage capacity, and system status",
+            steps: ["check battery", "check disk space", "list running processes"]
+        ),
+        CatalogSkillBlueprint(
+            name: "focus-environment",
+            category: "System",
+            trigger: "setup focus mode",
+            description: "Mute alerts, hide desktop distractions, and open focus timer",
+            steps: ["mute audio", "hide desktop icons", "start focus timer"]
+        ),
+        
+        // Memory (2)
+        CatalogSkillBlueprint(
+            name: "recall-context",
+            category: "Memory",
+            trigger: "recall recent context",
+            description: "Query recent memories and summarize current working context",
+            steps: ["query recent memories", "list active goals", "summarize working context"]
+        ),
+        CatalogSkillBlueprint(
+            name: "archive-notes",
+            category: "Memory",
+            trigger: "archive stale notes",
+            description: "Identify inactive notes, summarize key points, and move to archive",
+            steps: ["scan inactive notes", "extract summaries", "move to archive directory"]
+        ),
+        
+        // Communication (2)
+        CatalogSkillBlueprint(
+            name: "inbox-triage",
+            category: "Communication",
+            trigger: "triage my inbox",
+            description: "Scan unread incoming messages and draft priority task list",
+            steps: ["check unread messages", "filter urgent threads", "create follow-up tasks"]
+        ),
+        CatalogSkillBlueprint(
+            name: "daily-standup",
+            category: "Communication",
+            trigger: "prep daily standup",
+            description: "Summarize yesterday's work, today's plan, and potential blockers",
+            steps: ["list completed items", "list today priorities", "draft standup update"]
+        ),
+        
+        // Analysis (2)
+        CatalogSkillBlueprint(
+            name: "data-summary",
+            category: "Analysis",
+            trigger: "summarize data table",
+            description: "Compute summary statistics and highlight outliers in data",
+            steps: ["inspect data source", "compute key metrics", "format summary report"]
+        ),
+        CatalogSkillBlueprint(
+            name: "log-audit",
+            category: "Analysis",
+            trigger: "audit error logs",
+            description: "Scan logs for recurring errors and identify failure patterns",
+            steps: ["read error log files", "group by error code", "generate incident summary"]
+        )
+    ]
+    
+    private static let stopWords: Set<String> = [
+        "a", "about", "above", "after", "again", "against", "all", "am", "an", "and", "any", "are", "as", "at",
+        "be", "because", "been", "before", "being", "below", "between", "both", "but", "by",
+        "can", "could", "did", "do", "does", "doing", "down", "during",
+        "each", "few", "for", "from", "further",
+        "had", "has", "have", "having", "he", "her", "here", "hers", "herself", "him", "himself", "his", "how",
+        "i", "if", "in", "into", "is", "it", "its", "itself",
+        "just", "me", "more", "most", "my", "myself",
+        "no", "nor", "not", "now", "of", "off", "on", "once", "only", "or", "other", "our", "ours", "ourselves", "out", "over", "own",
+        "same", "she", "should", "so", "some", "such",
+        "than", "that", "the", "their", "theirs", "them", "themselves", "then", "there", "these", "they", "this", "those", "through", "to", "too",
+        "under", "until", "up", "very", "was", "we", "were", "what", "when", "where", "which", "while", "who", "whom", "why", "with", "would",
+        "you", "your", "yours", "yourself", "yourselves"
+    ]
+    
     public let skillsDirectory: URL
     private var didEnsureSeeded = false
+    
+    // In-memory inverted keyword index protected by NSLock
+    private let indexLock = NSLock()
+    private nonisolated(unsafe) var triggerIndex: [String: Set<String>] = [:]
+    private nonisolated(unsafe) var indexDirty: Bool = true
+    private nonisolated(unsafe) var indexedDirectory: String?
+    private nonisolated(unsafe) var cachedSkills: [SkillDefinition] = []
     
     public init(skillsDirectory: URL? = nil) {
         if let dir = skillsDirectory {
             self.skillsDirectory = dir
         } else {
-            let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-            self.skillsDirectory = appSupport
-                .appendingPathComponent("Pearl", isDirectory: true)
-                .appendingPathComponent("skills", isDirectory: true)
+            self.skillsDirectory = Self.defaultSkillsDirectory
         }
     }
     
@@ -109,6 +288,51 @@ public actor SkillEngine {
         """
         let meetingPrepURL = skillsDirectory.appendingPathComponent("meeting-prep.md")
         try meetingPrep.write(to: meetingPrepURL, atomically: true, encoding: .utf8)
+        
+        invalidateIndex()
+    }
+    
+    /// Invalidates the in-memory inverted trigger keyword index.
+    public nonisolated func invalidateIndex() {
+        indexLock.lock()
+        defer { indexLock.unlock() }
+        indexDirty = true
+    }
+    
+    /// Rebuilds the in-memory inverted keyword index if marked dirty or uninitialized.
+    @discardableResult
+    public func rebuildIndexIfNeeded() -> [SkillDefinition] {
+        indexLock.lock()
+        if !indexDirty && indexedDirectory == skillsDirectory.path {
+            let existing = cachedSkills
+            indexLock.unlock()
+            return existing
+        }
+        indexLock.unlock()
+        
+        let skills = loadSkills()
+        var newIndex: [String: Set<String>] = [:]
+        
+        for skill in skills {
+            let nameTokens = Self.tokenize(skill.name.replacingOccurrences(of: "-", with: " "))
+            let triggerTokens = Self.tokenize(skill.trigger)
+            let descTokens = Self.tokenize(skill.description)
+            let stepTokens = skill.steps.flatMap { Self.tokenize($0.description) + Self.tokenize($0.utterance) }
+            
+            let allTokens = Set(nameTokens + triggerTokens + descTokens + stepTokens)
+            for token in allTokens {
+                newIndex[token, default: []].insert(skill.name)
+            }
+        }
+        
+        indexLock.lock()
+        self.triggerIndex = newIndex
+        self.cachedSkills = skills
+        self.indexedDirectory = skillsDirectory.path
+        self.indexDirty = false
+        indexLock.unlock()
+        
+        return skills
     }
     
     /// Loads all skills from markdown files in the skills directory.
@@ -131,27 +355,197 @@ public actor SkillEngine {
         return loaded.sorted { $0.name.lowercased() < $1.name.lowercased() }
     }
     
-    /// Matches normalized lowercased utterance against skill trigger or "run skill <name>".
-    public func matchSkill(for utterance: String) -> SkillDefinition? {
+    /// Finds a skill matching the given utterance using exact match or inverted index scoring.
+    public func findSkillByTrigger(_ utterance: String) -> (skill: SkillDefinition, score: Double)? {
         let normalized = utterance.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard !normalized.isEmpty else { return nil }
         
-        let skills = loadSkills()
+        let skills = rebuildIndexIfNeeded()
+        
+        // 1. Exact match against trigger or "run skill <name>", "run <name>", "skill <name>"
         for skill in skills {
             let trig = skill.trigger.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
             let name = skill.name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
             let nameNoHyphens = name.replacingOccurrences(of: "-", with: " ")
             
-            if normalized == trig {
-                return skill
-            }
-            if normalized == "run skill \(name)" || normalized == "run skill \(nameNoHyphens)" ||
+            if normalized == trig ||
+               normalized == "run skill \(name)" || normalized == "run skill \(nameNoHyphens)" ||
                normalized == "run \(name)" || normalized == "run \(nameNoHyphens)" ||
                normalized == "skill \(name)" || normalized == "skill \(nameNoHyphens)" {
-                return skill
+                return (skill, 1.0)
             }
         }
+        
+        // 2. Tokenize utterance and lookup candidates in inverted index (O(1) per token)
+        let uttTokens = Set(Self.tokenize(normalized))
+        guard !uttTokens.isEmpty else { return nil }
+        
+        indexLock.lock()
+        var candidateNames: Set<String> = []
+        for token in uttTokens {
+            if let names = triggerIndex[token] {
+                candidateNames.formUnion(names)
+            }
+        }
+        indexLock.unlock()
+        
+        guard !candidateNames.isEmpty else { return nil }
+        
+        var bestSkill: SkillDefinition?
+        var bestScore: Double = 0.0
+        
+        for name in candidateNames {
+            guard let skill = skills.first(where: { $0.name == name }) else { continue }
+            
+            let triggerTokens = Set(Self.tokenize(skill.trigger))
+            let overlapCount = uttTokens.intersection(triggerTokens).count
+            let triggerTokenCount = triggerTokens.count
+            
+            var score = Double(overlapCount) / Double(max(1, triggerTokenCount))
+            
+            // Exact phrase bonus if utterance contains full trigger phrase or vice-versa
+            let normTrig = skill.trigger.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            if normalized.contains(normTrig) {
+                score += 0.25
+            } else if normTrig.contains(normalized) {
+                score += 0.15
+            }
+            
+            score = min(1.0, score)
+            
+            if score > bestScore {
+                bestScore = score
+                bestSkill = skill
+            }
+        }
+        
+        if let skill = bestSkill, bestScore >= 0.6 {
+            return (skill, bestScore)
+        }
+        
         return nil
+    }
+    
+    /// Matches normalized lowercased utterance against skill trigger or "run skill <name>".
+    public func matchSkill(for utterance: String) -> SkillDefinition? {
+        return findSkillByTrigger(utterance)?.skill
+    }
+    
+    /// Searches available skills using inverted index keyword overlap and relevance scoring.
+    public func searchSkills(query: String) -> [SkillDefinition] {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !trimmed.isEmpty else { return [] }
+        
+        let skills = rebuildIndexIfNeeded()
+        let queryTokens = Set(Self.tokenize(trimmed))
+        guard !queryTokens.isEmpty else { return [] }
+        
+        indexLock.lock()
+        var candidateNames: Set<String> = []
+        for token in queryTokens {
+            if let names = triggerIndex[token] {
+                candidateNames.formUnion(names)
+            }
+        }
+        indexLock.unlock()
+        
+        var scored: [(skill: SkillDefinition, score: Double)] = []
+        for name in candidateNames {
+            guard let skill = skills.first(where: { $0.name == name }) else { continue }
+            
+            let nameTokens = Set(Self.tokenize(skill.name.replacingOccurrences(of: "-", with: " ")))
+            let triggerTokens = Set(Self.tokenize(skill.trigger))
+            let descTokens = Set(Self.tokenize(skill.description))
+            let stepTokens = Set(skill.steps.flatMap { Self.tokenize($0.description) + Self.tokenize($0.utterance) })
+            let allSkillTokens = nameTokens.union(triggerTokens).union(descTokens).union(stepTokens)
+            
+            let overlap = queryTokens.intersection(allSkillTokens).count
+            var score = Double(overlap) / Double(max(1, queryTokens.count))
+            
+            if skill.name.lowercased().contains(trimmed) || skill.trigger.lowercased().contains(trimmed) {
+                score += 0.5
+            }
+            if skill.description.lowercased().contains(trimmed) {
+                score += 0.25
+            }
+            if skill.steps.contains(where: { $0.utterance.lowercased().contains(trimmed) || $0.description.lowercased().contains(trimmed) }) {
+                score += 0.2
+            }
+            
+            if score > 0 {
+                scored.append((skill, score))
+            }
+        }
+        
+        scored.sort {
+            if $0.score != $1.score {
+                return $0.score > $1.score
+            }
+            return $0.skill.name.lowercased() < $1.skill.name.lowercased()
+        }
+        
+        return scored.map { $0.skill }
+    }
+    
+    /// Searches the built-in skill catalog by query and optional category.
+    public nonisolated func searchCatalog(query: String, category: String? = nil) -> [CatalogSkillBlueprint] {
+        let pool: [CatalogSkillBlueprint]
+        if let cat = category?.trimmingCharacters(in: .whitespacesAndNewlines), !cat.isEmpty {
+            pool = Self.builtInCatalog.filter { $0.category.caseInsensitiveCompare(cat) == .orderedSame }
+        } else {
+            pool = Self.builtInCatalog
+        }
+        
+        let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !trimmedQuery.isEmpty else {
+            return pool
+        }
+        
+        let queryTokens = Set(Self.tokenize(trimmedQuery))
+        
+        var scored: [(bp: CatalogSkillBlueprint, score: Double)] = []
+        for bp in pool {
+            let nameTokens = Set(Self.tokenize(bp.name.replacingOccurrences(of: "-", with: " ")))
+            let trigTokens = Set(Self.tokenize(bp.trigger))
+            let descTokens = Set(Self.tokenize(bp.description))
+            let stepTokens = Set(bp.steps.flatMap { Self.tokenize($0) })
+            let allTokens = nameTokens.union(trigTokens).union(descTokens).union(stepTokens)
+            
+            let overlap = queryTokens.intersection(allTokens).count
+            var score = queryTokens.isEmpty ? 0.0 : Double(overlap) / Double(max(1, queryTokens.count))
+            
+            if bp.name.lowercased().contains(trimmedQuery) || bp.trigger.lowercased().contains(trimmedQuery) {
+                score += 0.5
+            }
+            if bp.description.lowercased().contains(trimmedQuery) {
+                score += 0.25
+            }
+            
+            if score > 0 {
+                scored.append((bp, score))
+            }
+        }
+        
+        scored.sort {
+            if $0.score != $1.score {
+                return $0.score > $1.score
+            }
+            return $0.bp.name.lowercased() < $1.bp.name.lowercased()
+        }
+        
+        return scored.map { $0.bp }
+    }
+    
+    /// Tokenizes input text into lowercase alphanumeric tokens >= 2 chars, filtering stop words.
+    public static func tokenize(_ text: String, filterStopWords: Bool = true) -> [String] {
+        let lower = text.lowercased()
+        let rawTokens = lower.components(separatedBy: CharacterSet.alphanumerics.inverted)
+        return rawTokens.compactMap { token in
+            let trimmed = token.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard trimmed.count >= 2 else { return nil }
+            if filterStopWords && stopWords.contains(trimmed) { return nil }
+            return trimmed
+        }
     }
     
     /// Saves a skill definition as a human-readable markdown file in the skills directory.
@@ -183,6 +577,8 @@ public actor SkillEngine {
         
         let content = lines.joined(separator: "\n") + "\n"
         try content.write(to: fileURL, atomically: true, encoding: .utf8)
+        
+        invalidateIndex()
         return fileURL
     }
     
@@ -196,6 +592,7 @@ public actor SkillEngine {
         let fileURL = skillsDirectory.appendingPathComponent("\(sanitizedName).md")
         if FileManager.default.fileExists(atPath: fileURL.path) {
             try FileManager.default.removeItem(at: fileURL)
+            invalidateIndex()
             return
         }
         
@@ -205,6 +602,7 @@ public actor SkillEngine {
            let url = match.fileURL,
            FileManager.default.fileExists(atPath: url.path) {
             try FileManager.default.removeItem(at: url)
+            invalidateIndex()
             return
         }
         
