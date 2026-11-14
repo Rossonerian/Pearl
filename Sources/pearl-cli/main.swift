@@ -72,7 +72,7 @@ func sendIPC(command: String, args: [String: String]? = nil) -> (response: IPCRe
 let args = Array(CommandLine.arguments.dropFirst())
 guard !args.isEmpty else {
     print("""
-    Pearl CLI (v2.0)
+    Pearl CLI (v3.1)
     Usage:
       pearl ping                  Check daemon status & latency
       pearl status                Show resident memory & active state
@@ -85,6 +85,11 @@ guard !args.isEmpty else {
       pearl memory [stats|export] Inspect or export long-term memory
       pearl tasks [list|create|done|delete] Manage local SQLite tasks
       pearl brief                 Generate executive morning briefing
+      pearl skills [list|run <name>] Manage or execute user skills/macros
+      pearl nudges                Evaluate proactive nudges & quiet hours
+      pearl jobs list             Inspect running & scheduled background jobs
+      pearl approvals [list|approve <id>|deny <id>] Review pending action approvals
+      pearl abort                 Emergency abort all running operations
       pearl quit                  Terminate Pearl daemon
       pearl "<command>"           Send query or command to Pearl
     """)
@@ -309,6 +314,101 @@ case "hide":
         print(resp.message)
     } else {
         exit(1)
+    }
+case "skills", "skill":
+    let sub = args.count > 1 ? args[1].lowercased() : "list"
+    let sema = DispatchSemaphore(value: 0)
+    Task {
+        let engine = SkillEngine.shared
+        try? await engine.seedDefaultSkillsIfEmpty()
+        
+        switch sub {
+        case "list":
+            let skills = await engine.loadSkills()
+            if skills.isEmpty {
+                print("No skills found.")
+            } else {
+                print("Available Skills (\(skills.count)):")
+                for s in skills {
+                    print("  • \(s.name) - Trigger: \"\(s.trigger)\" (\(s.steps.count) step(s))")
+                    print("    \(s.description)")
+                }
+            }
+        case "run":
+            guard args.count > 2 else {
+                print("Usage: pearl skills run <skill-name>")
+                sema.signal()
+                return
+            }
+            let target = args.dropFirst(2).joined(separator: " ")
+            let skills = await engine.loadSkills()
+            let matched = await engine.matchSkill(for: target)
+            if let skill = skills.first(where: { $0.name.lowercased() == target.lowercased() }) ?? matched {
+                print("Running skill: \(skill.name) (\(skill.steps.count) steps)")
+                for step in skill.steps {
+                    print("  [\(step.index)] \(step.description) -> '\(step.utterance)'")
+                    let res = sendIPC(command: "execute", args: ["query": step.utterance])
+                    if let msg = res.response?.message {
+                        print("      \(msg)")
+                    }
+                }
+            } else {
+                print("Skill '\(target)' not found.")
+            }
+        default:
+            print("Unknown skills subcommand: '\(sub)'. Available: list, run <name>")
+        }
+        sema.signal()
+    }
+    sema.wait()
+case "nudges", "nudge":
+    let sema = DispatchSemaphore(value: 0)
+    Task {
+        do {
+            let engine = BriefingEngine.shared
+            let isQuiet = engine.isQuietHours()
+            let nudges = try await engine.evaluateNudges()
+            let quietStatus = isQuiet ? " (Quiet Hours Active)" : ""
+            if nudges.isEmpty {
+                print("No proactive nudges at this time.\(quietStatus)")
+            } else {
+                print("Proactive Nudges (\(nudges.count))\(quietStatus):")
+                for n in nudges {
+                    print("  • \(n.priority.badge) [\(n.category.uppercased())] \(n.title): \(n.message)")
+                }
+            }
+        } catch {
+            print("Error evaluating nudges: \(error.localizedDescription)")
+        }
+        sema.signal()
+    }
+    sema.wait()
+case "jobs", "job":
+    let sub = args.count > 1 ? args[1].lowercased() : "list"
+    let result = sendIPC(command: "jobs", args: ["subcommand": sub])
+    if let resp = result.response {
+        print(resp.message)
+    } else {
+        print("Pearl daemon is not running (cannot inspect background jobs).")
+    }
+case "approvals", "approval":
+    let sub = args.count > 1 ? args[1].lowercased() : "list"
+    var ipcArgs: [String: String] = ["subcommand": sub]
+    if (sub == "approve" || sub == "deny") && args.count > 2 {
+        ipcArgs["id"] = args[2]
+    }
+    let result = sendIPC(command: "approvals", args: ipcArgs)
+    if let resp = result.response {
+        print(resp.message)
+    } else {
+        print("Pearl daemon is not running (cannot inspect approvals).")
+    }
+case "abort":
+    let result = sendIPC(command: "abort")
+    if let resp = result.response {
+        print(resp.message)
+    } else {
+        print("Emergency abort signaled (Pearl daemon offline).")
     }
 case "quit":
     let result = sendIPC(command: "quit")
