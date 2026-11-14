@@ -58,9 +58,22 @@ let package = Package(
             path: "Sources/pearl-cli"
         ),
         .testTarget(
+            name: "PearlCoreTests",
+            dependencies: ["PearlCore"],
+            path: "Tests/PearlCoreTests"
+        ),
+        .testTarget(
+            name: "PearlToolsTests",
+            dependencies: ["PearlCore", "PearlTools"],
+            path: "Tests/PearlToolsTests"
+        ),
+        .testTarget(
             name: "PearlMemoryTests",
-            dependencies: ["PearlMemory", "PearlCore"],
-            path: "Tests/PearlMemoryTests"
+            dependencies: ["PearlCore", "PearlMemory"],
+            path: "Tests/PearlMemoryTests",
+            linkerSettings: [
+                .linkedLibrary("sqlite3")
+            ]
         )
     ]
 )

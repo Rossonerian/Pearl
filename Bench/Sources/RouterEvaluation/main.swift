@@ -10,10 +10,25 @@ struct CorpusItem: Codable {
 @main
 struct RouterEvaluationRunner {
     static func main() {
-        let corpusPath = "/Users/rossonerian/Projects/Pearl/corpora/golden_commands.jsonl"
-        guard let data = try? Data(contentsOf: URL(fileURLWithPath: corpusPath)),
+        let candidates = [
+            ProcessInfo.processInfo.environment["PEARL_PROJECT_ROOT"],
+            FileManager.default.currentDirectoryPath,
+            URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().path,
+            "/Users/rossonerian/Projects/Pearl"
+        ].compactMap { $0 }
+        
+        var projectRoot = URL(fileURLWithPath: "/Users/rossonerian/Projects/Pearl")
+        for candidate in candidates {
+            let candidateRoot = URL(fileURLWithPath: candidate)
+            if FileManager.default.fileExists(atPath: candidateRoot.appendingPathComponent("corpora/golden_commands.jsonl").path) {
+                projectRoot = candidateRoot
+                break
+            }
+        }
+        let corpusURL = projectRoot.appendingPathComponent("corpora/golden_commands.jsonl")
+        guard let data = try? Data(contentsOf: corpusURL),
               let content = String(data: data, encoding: .utf8) else {
-            print("Failed to load corpus from \(corpusPath)")
+            print("Failed to load corpus from \(corpusURL.path)")
             exit(1)
         }
         
@@ -96,7 +111,8 @@ struct RouterEvaluationRunner {
         print(String(format: "False-Executions on Negations: %d (Target: 0) -> %@", falseExecutionsOnNegation, falseExecutionsOnNegation == 0 ? "PASS" : "FAIL"))
         print(String(format: "Router Latency: p50=%.4f ms | p95=%.4f ms | p99=%.4f ms | mean=%.4f ms", p50, p95, p99, mean))
         
-        let outDir = URL(fileURLWithPath: "/Users/rossonerian/Projects/Pearl/Bench/results")
+        let outDir = projectRoot.appendingPathComponent("Bench/results")
+        try? FileManager.default.createDirectory(at: outDir, withIntermediateDirectories: true)
         let outURL = outDir.appendingPathComponent("router_eval.csv")
         try? csvLines.joined(separator: "\n").write(to: outURL, atomically: true, encoding: .utf8)
         print("Saved router evaluation CSV to: \(outURL.path)")

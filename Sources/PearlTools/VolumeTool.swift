@@ -19,7 +19,8 @@ public final class VolumeTool: PearlTool {
             return ToolResult(success: true, message: "Current volume is \(Int(currentVol * 100))%.")
         }
         
-        let targetFloat = Float(max(0, min(100, targetInt))) / 100.0
+        let clampedInt = max(0, min(100, targetInt))
+        let targetFloat = Float(clampedInt) / 100.0
         setVolume(targetFloat)
         
         let previousLevel = currentVol
@@ -27,7 +28,7 @@ public final class VolumeTool: PearlTool {
             VolumeTool.setVolumeStatic(previousLevel)
         }
         
-        let msg = targetInt == 0 ? "Volume muted (0%)." : "Volume set to \(targetInt)%."
+        let msg = clampedInt == 0 ? "Volume muted (0%)." : "Volume set to \(clampedInt)%."
         return ToolResult(success: true, message: msg, undoAction: undoAction)
     }
     
