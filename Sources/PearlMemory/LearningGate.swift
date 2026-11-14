@@ -117,6 +117,49 @@ public actor LearningGate {
     
     // MARK: - Proposed Facts Queue (Implicit Learning)
     
+    /// Detects clear user preference patterns from utterance and queues a pending proposal
+    /// for explicit user approval. Strictly blocks untrusted sources and external injection.
+    @discardableResult
+    public func detectAndProposePreference(
+        from utterance: String,
+        source: String = "user",
+        trust: TrustLevel = .trusted
+    ) throws -> ProposedFact? {
+        // Strictly reject untrusted sources or non-user origins
+        guard trust == .trusted && source == "user" else {
+            return nil
+        }
+        
+        let trimmed = utterance.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            return nil
+        }
+        
+        let lower = trimmed.lowercased()
+        let preferenceTriggers = [
+            "i prefer ",
+            "my favorite ",
+            "always use ",
+            "call me ",
+            "i usually work in "
+        ]
+        
+        let isPreference = preferenceTriggers.contains { trigger in
+            lower.hasPrefix(trigger) || lower.contains(trigger)
+        }
+        
+        guard isPreference else {
+            return nil
+        }
+        
+        return try proposeFact(
+            content: trimmed,
+            category: .profile,
+            source: source,
+            trust: trust
+        )
+    }
+    
     /// Implicit learning propositions (e.g. from background observations or sleep-time compute)
     /// are stored as pending proposals until the user explicitly approves.
     @discardableResult
