@@ -89,7 +89,12 @@ public actor MemoryStore {
     // MARK: - Profile Management (Hard Token & Byte Budget)
     
     public func getProfile() async -> String {
-        // Read from canonical SQLite store first
+        // If profile.md on disk exists and has content, prioritize it for immediate sync/inspection
+        if let diskProfile = try? String(contentsOf: profileURL, encoding: .utf8), !diskProfile.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return diskProfile
+        }
+        
+        // Read from canonical SQLite store
         let profileItems = await ftsIndex.getAllItems(category: .profile)
         if !profileItems.isEmpty {
             // Check if there is a main profile document or formatted bullets
@@ -104,7 +109,7 @@ public actor MemoryStore {
             return lines.joined(separator: "\n")
         }
         
-        return (try? String(contentsOf: profileURL, encoding: .utf8)) ?? ""
+        return ""
     }
     
     public func setProfile(_ content: String) async throws {
