@@ -145,6 +145,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         if hudPanel.isPillVisible {
             LiveSpeechRecognizer.shared.stopListening()
             SpeechSynthesizerService.shared.stopPlayback()
+            AudioPipelineService.shared.enterStandby()
             hudPanel.hidePill()
         } else {
             hudPanel.showPill(text: "Listening...", thinking: false)
@@ -163,19 +164,75 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         
         hudPanel.showPill(text: "Thinking...", thinking: true)
         
-        Task {
+        Task { [weak self] in
+            guard let self = self else { return }
             let request = AssistantRequest(utterance: utterance, origin: .voice)
             let response = await AssistantPipeline.shared.process(request: request)
             
             await MainActor.run {
-                self.hudPanel.showPill(text: response.responseText, thinking: false)
-                SpeechSynthesizerService.shared.speak(text: response.speechText)
+                self.hudPanel.recordTurn(
+                    userUtterance: utterance,
+                    assistantResponse: response.responseText,
+                    badgeLabel: response.badge.label,
+                    isLocal: response.badge.isLocal,
+                    latencyMs: response.latencyMs
+                )
+                
+                let isConfirmation = response.responseText.localizedCaseInsensitiveContains("confirmation required") ||
+                                     response.responseText.localizedCaseInsensitiveContains("user confirmation required")
+                
+                if isConfirmation {
+                    let toolName = response.badge.modelID.isEmpty ? "Action" : response.badge.modelID
+                    self.hudPanel.showConfirmation(
+                        toolName: toolName,
+                        prompt: response.responseText,
+                        tier: "T2",
+                        onConfirm: { [weak self] in
+                            Task { [weak self] in
+                                let confirmedReq = AssistantRequest(
+                                    utterance: utterance,
+                                    origin: .voice,
+                                    userConfirmed: true
+                                )
+                                let confirmedResp = await AssistantPipeline.shared.process(request: confirmedReq)
+                                await MainActor.run {
+                                    self?.hudPanel.recordTurn(
+                                        userUtterance: "Confirmed: \(utterance)",
+                                        assistantResponse: confirmedResp.responseText,
+                                        badgeLabel: confirmedResp.badge.label,
+                                        isLocal: confirmedResp.badge.isLocal,
+                                        latencyMs: confirmedResp.latencyMs
+                                    )
+                                    self?.hudPanel.showPill(
+                                        text: confirmedResp.responseText,
+                                        thinking: false,
+                                        tierBadge: confirmedResp.badge.label,
+                                        isLocal: confirmedResp.badge.isLocal
+                                    )
+                                    SpeechSynthesizerService.shared.speak(text: confirmedResp.speechText)
+                                }
+                            }
+                        },
+                        onCancel: { [weak self] in
+                            self?.hudPanel.showPill(text: "Action cancelled", thinking: false)
+                        }
+                    )
+                } else {
+                    self.hudPanel.showPill(
+                        text: response.responseText,
+                        thinking: false,
+                        tierBadge: response.badge.label,
+                        isLocal: response.badge.isLocal
+                    )
+                    SpeechSynthesizerService.shared.speak(text: response.speechText)
+                }
             }
         }
     }
     
     private func handleMemoryPressure() {
         hudPanel?.hidePill()
+        AudioPipelineService.shared.enterStandby()
     }
     
     private func openSettings() {
@@ -264,8 +321,44 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
             responseMessage = assistantResp.responseText
             isSuccess = assistantResp.success
             await MainActor.run {
-                self.hudPanel.showPill(text: assistantResp.responseText, thinking: false)
+                self.hudPanel.recordTurn(
+                    userUtterance: query,
+                    assistantResponse: assistantResp.responseText,
+                    badgeLabel: assistantResp.badge.label,
+                    isLocal: assistantResp.badge.isLocal,
+                    latencyMs: assistantResp.latencyMs
+                )
+                self.hudPanel.showPill(
+                    text: assistantResp.responseText,
+                    thinking: false,
+                    tierBadge: assistantResp.badge.label,
+                    isLocal: assistantResp.badge.isLocal
+                )
             }
+            
+        case "toggle_history":
+            await MainActor.run {
+                self.hudPanel.toggleHistory()
+            }
+            responseMessage = "Conversation history toggled"
+            
+        case "confirm_tool":
+            let toolName = req.arguments?["tool"] ?? "TestTool"
+            let promptText = req.arguments?["prompt"] ?? "Execute sensitive tool action?"
+            await MainActor.run {
+                self.hudPanel.showConfirmation(
+                    toolName: toolName,
+                    prompt: promptText,
+                    tier: "T2",
+                    onConfirm: { [weak self] in
+                        self?.hudPanel.showPill(text: "Action confirmed", thinking: false)
+                    },
+                    onCancel: { [weak self] in
+                        self?.hudPanel.showPill(text: "Action cancelled", thinking: false)
+                    }
+                )
+            }
+            responseMessage = "Tool confirmation presented"
             
         case "quit":
             responseMessage = "Pearl daemon terminating"

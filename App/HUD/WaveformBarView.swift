@@ -1,5 +1,8 @@
 import AppKit
 
+/// Waveform audio bar view for Pearl HUD.
+///
+/// Implements 60 Hz display refresh cadence adhering to MacBook Neo specifications.
 public final class WaveformBarView: NSView {
     public var barCount: Int = 7
     public var levels: [CGFloat] = Array(repeating: 0.15, count: 7)
@@ -17,11 +20,15 @@ public final class WaveformBarView: NSView {
         fatalError("init(coder:) has not been implemented")
     }
     
-    public func updateThinking(step: CGFloat = 0.12) {
+    public func updateThinking(step: CGFloat = 0.10) {
         isThinking = true
+        if NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
+            levels = Array(repeating: 0.5, count: barCount)
+            needsDisplay = true
+            return
+        }
         phase += step
         for i in 0..<barCount {
-            // Undulating traveling wave across the 7 bars
             let offset = CGFloat(i) * 0.65
             let sinVal = sin(phase + offset)
             levels[i] = CGFloat(0.20 + 0.70 * ((sinVal + 1.0) / 2.0))
@@ -46,8 +53,10 @@ public final class WaveformBarView: NSView {
         let totalWidth = bounds.width
         let totalHeight = bounds.height
         let barSpacing: CGFloat = 4.0
-        let barWidth: CGFloat = (totalWidth - (CGFloat(barCount - 1) * barSpacing)) / CGFloat(barCount)
+        let barWidth: CGFloat = max(2.0, (totalWidth - (CGFloat(barCount - 1) * barSpacing)) / CGFloat(barCount))
         let minHeight: CGFloat = 4.0
+        
+        let isHighContrast = NSWorkspace.shared.accessibilityDisplayShouldIncreaseContrast
         
         for i in 0..<barCount {
             let barX = CGFloat(i) * (barWidth + barSpacing)
@@ -58,12 +67,10 @@ public final class WaveformBarView: NSView {
             let path = CGPath(roundedRect: barRect, cornerWidth: barWidth / 2.0, cornerHeight: barWidth / 2.0, transform: nil)
             
             if isThinking {
-                // Violet to cyan thinking luminescence
-                let alpha = 0.5 + 0.5 * levels[i]
+                let alpha = isHighContrast ? 0.95 : (0.50 + 0.50 * levels[i])
                 context.setFillColor(CGColor(red: 0.60, green: 0.40, blue: 0.95, alpha: alpha))
             } else {
-                // Crisp white-gold active waveform
-                let alpha = 0.6 + 0.4 * levels[i]
+                let alpha = isHighContrast ? 1.0 : (0.60 + 0.40 * levels[i])
                 context.setFillColor(CGColor(red: 0.95, green: 0.95, blue: 0.98, alpha: alpha))
             }
             
