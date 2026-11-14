@@ -1,6 +1,6 @@
 import Foundation
 
-public struct ResolvedIntent: Sendable {
+public struct ResolvedIntent: Sendable, Codable, Equatable {
     public let toolName: String
     public let arguments: [String: String]
     public let confidence: Double
