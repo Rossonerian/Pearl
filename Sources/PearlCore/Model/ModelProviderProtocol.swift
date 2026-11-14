@@ -78,25 +78,30 @@ public struct ModelResponse: Sendable {
     }
 }
 
+public typealias ModelContext = ModelExecutionContext
+
 public struct ModelExecutionContext: Sendable {
     public let systemPrompt: String?
     public let maxTokens: Int?
     public let temperature: Double?
     public let trustState: TrustLevel
     public let forceEscalation: Bool
+    public let conversationHistory: [ConversationTurn]?
     
     public init(
         systemPrompt: String? = nil,
         maxTokens: Int? = nil,
         temperature: Double? = nil,
         trustState: TrustLevel = .trusted,
-        forceEscalation: Bool = false
+        forceEscalation: Bool = false,
+        conversationHistory: [ConversationTurn]? = nil
     ) {
         self.systemPrompt = systemPrompt
         self.maxTokens = maxTokens
         self.temperature = temperature
         self.trustState = trustState
         self.forceEscalation = forceEscalation
+        self.conversationHistory = conversationHistory
     }
 }
 

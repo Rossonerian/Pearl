@@ -117,7 +117,11 @@ public final class AppleFMProvider: ModelProvider, @unchecked Sendable {
         }
         
         // 2. Direct conversational generation
-        let conversationalInstructions = context.systemPrompt ?? "You are Pearl, an intelligent, concise on-device voice assistant for Mac. Provide direct, helpful answers."
+        var conversationalInstructions = context.systemPrompt ?? "You are Pearl, an intelligent, concise on-device voice assistant for Mac. Provide direct, helpful answers."
+        if let history = context.conversationHistory, !history.isEmpty {
+            let historyText = history.map { "User: \($0.cleanedInput)\nAssistant: \($0.assistantResponse)" }.joined(separator: "\n")
+            conversationalInstructions += "\n\nRecent conversation history:\n" + historyText
+        }
         let session = LanguageModelSession(model: model, instructions: conversationalInstructions)
         do {
             let res = try await session.respond(to: prompt)

@@ -99,6 +99,8 @@ public final class AssistantPipeline: @unchecked Sendable {
     private let policyEngine: PolicyEngine
     private let toolExecutor: ModelToolExecutor
     private let fallbackChain: FallbackChain
+    public let sessionManager: SessionManager
+    public let referenceResolver: ContextReferenceResolver
     
     private let lock = NSLock()
     private var _memoryProvider: (any MemoryContextProvider)?
@@ -121,13 +123,17 @@ public final class AssistantPipeline: @unchecked Sendable {
         toolRegistry: ToolRegistry = .shared,
         policyEngine: PolicyEngine = .shared,
         toolExecutor: ModelToolExecutor = .shared,
-        fallbackChain: FallbackChain = FallbackChain()
+        fallbackChain: FallbackChain = FallbackChain(),
+        sessionManager: SessionManager = .shared,
+        referenceResolver: ContextReferenceResolver = ContextReferenceResolver()
     ) {
         self.router = router
         self.toolRegistry = toolRegistry
         self.policyEngine = policyEngine
         self.toolExecutor = toolExecutor
         self.fallbackChain = fallbackChain
+        self.sessionManager = sessionManager
+        self.referenceResolver = referenceResolver
     }
     
     public func process(request: AssistantRequest) async -> AssistantResponse {
@@ -193,28 +199,56 @@ public final class AssistantPipeline: @unchecked Sendable {
                         isLocal: true,
                         details: "id: \(factId)"
                     )
+                    let duration = elapsedMs()
+                    let turn = ConversationTurn(
+                        turnId: UUID(),
+                        timestamp: Date(),
+                        rawInput: request.utterance,
+                        cleanedInput: trimmed,
+                        resolvedIntent: nil,
+                        toolInvocations: [],
+                        assistantResponse: "Remembered: '\(memoryFact)'.",
+                        tokenUsage: nil,
+                        latencyMs: duration
+                    )
+                    await sessionManager.recordTurn(turn, sessionID: request.sessionID)
                     return AssistantResponse(
                         id: request.id,
                         success: true,
                         responseText: "Remembered: '\(memoryFact)'.",
                         badge: badge,
-                        latencyMs: elapsedMs(),
+                        latencyMs: duration,
                         memoryUpdated: true
                     )
                 } catch {
+                    let duration = elapsedMs()
                     return AssistantResponse(
                         id: request.id,
                         success: false,
                         responseText: "Could not save fact: \(error.localizedDescription)",
                         badge: HUDTurnBadge(label: "error", provider: "MemoryStore", modelID: "gate", isLocal: true),
-                        latencyMs: elapsedMs()
+                        latencyMs: duration
                     )
                 }
             }
         }
         
+        // 5.5. Contextual Reference Resolution
+        var effectiveUtterance = trimmed
+        var preResolvedIntent: ResolvedIntent? = nil
+        
+        if referenceResolver.containsAnaphora(trimmed) {
+            let recentTurns = await sessionManager.getRecentTurns(sessionID: request.sessionID)
+            let resolution = referenceResolver.resolve(utterance: trimmed, history: recentTurns)
+            if resolution.didResolve {
+                effectiveUtterance = resolution.resolvedUtterance
+                preResolvedIntent = resolution.resolvedIntent
+            }
+        }
+        
         // 6. Classify intent via Deterministic Router (L0)
-        if let intent = router.resolve(utterance: trimmed) {
+        let intent = preResolvedIntent ?? router.resolve(utterance: effectiveUtterance)
+        if let intent = intent {
             if let tool = toolRegistry.tool(named: intent.toolName) {
                 let toolContext = ToolExecutionContext(
                     trustState: effectiveTrust,
@@ -233,30 +267,66 @@ public final class AssistantPipeline: @unchecked Sendable {
                         isLocal: true,
                         details: String(format: "p50: < 1 ms")
                     )
+                    let duration = elapsedMs()
+                    let toolRecord = ToolExecutionRecord(
+                        toolName: intent.toolName,
+                        arguments: intent.arguments,
+                        success: toolRes.success,
+                        resultMessage: toolRes.message,
+                        durationMs: duration
+                    )
+                    let turn = ConversationTurn(
+                        turnId: UUID(),
+                        timestamp: Date(),
+                        rawInput: request.utterance,
+                        cleanedInput: effectiveUtterance,
+                        resolvedIntent: intent,
+                        toolInvocations: [toolRecord],
+                        assistantResponse: toolRes.message,
+                        tokenUsage: nil,
+                        latencyMs: duration
+                    )
+                    await sessionManager.recordTurn(turn, sessionID: request.sessionID)
+                    
                     return AssistantResponse(
                         id: request.id,
                         success: toolRes.success,
                         responseText: toolRes.message,
                         badge: badge,
-                        latencyMs: elapsedMs(),
+                        latencyMs: duration,
                         toolResults: [toolRes]
                     )
                 } catch {
+                    let duration = elapsedMs()
+                    let errorTurn = ConversationTurn(
+                        turnId: UUID(),
+                        timestamp: Date(),
+                        rawInput: request.utterance,
+                        cleanedInput: effectiveUtterance,
+                        resolvedIntent: intent,
+                        toolInvocations: [],
+                        assistantResponse: "Execution error: \(error.localizedDescription)",
+                        tokenUsage: nil,
+                        latencyMs: duration
+                    )
+                    await sessionManager.recordTurn(errorTurn, sessionID: request.sessionID)
+                    
                     return AssistantResponse(
                         id: request.id,
                         success: false,
                         responseText: "Execution error: \(error.localizedDescription)",
                         badge: HUDTurnBadge(label: "error", provider: "PolicyEngine", modelID: intent.toolName, isLocal: true),
-                        latencyMs: elapsedMs()
+                        latencyMs: duration
                     )
                 }
             } else {
+                let duration = elapsedMs()
                 return AssistantResponse(
                     id: request.id,
                     success: false,
                     responseText: "Tool '\(intent.toolName)' not registered.",
                     badge: HUDTurnBadge(label: "error", provider: "ToolRegistry", modelID: "missing", isLocal: true),
-                    latencyMs: elapsedMs()
+                    latencyMs: duration
                 )
             }
         }
@@ -264,17 +334,19 @@ public final class AssistantPipeline: @unchecked Sendable {
         // 7. Dynamic Context Assembly & Memory Retrieval
         var memorySection: String? = nil
         if let provider = memoryProvider {
-            memorySection = try? await provider.assembleContext(query: trimmed)
+            memorySection = try? await provider.assembleContext(query: effectiveUtterance)
         }
         
+        let boundedHistory = await sessionManager.getBoundedHistory(sessionID: request.sessionID)
         let modelContext = ModelExecutionContext(
             systemPrompt: memorySection,
             trustState: effectiveTrust,
-            forceEscalation: request.forceEscalation
+            forceEscalation: request.forceEscalation,
+            conversationHistory: boundedHistory
         )
         
         // 8. Fallback Route: Model Inference with ModelToolExecutor
-        let modelRes = await fallbackChain.process(utterance: trimmed, context: modelContext)
+        let modelRes = await fallbackChain.process(utterance: effectiveUtterance, context: modelContext)
         
         // 9 & 10 & 11. Execute Model-Generated Tool Calls if present
         if !modelRes.toolCalls.isEmpty {
@@ -293,23 +365,61 @@ public final class AssistantPipeline: @unchecked Sendable {
             )
             
             let finalMessage = summary.synthesizedMessage.isEmpty ? modelRes.content : summary.synthesizedMessage
+            let duration = elapsedMs()
+            let toolRecords = summary.results.enumerated().map { (idx, res) in
+                let call = idx < modelRes.toolCalls.count ? modelRes.toolCalls[idx] : nil
+                return ToolExecutionRecord(
+                    toolName: call?.toolName ?? "tool",
+                    arguments: call?.arguments ?? [:],
+                    success: res.success,
+                    resultMessage: res.message,
+                    durationMs: duration
+                )
+            }
+            let turn = ConversationTurn(
+                turnId: UUID(),
+                timestamp: Date(),
+                rawInput: request.utterance,
+                cleanedInput: effectiveUtterance,
+                resolvedIntent: nil,
+                toolInvocations: toolRecords,
+                assistantResponse: finalMessage,
+                tokenUsage: modelRes.usage,
+                latencyMs: duration
+            )
+            await sessionManager.recordTurn(turn, sessionID: request.sessionID)
+            
             return AssistantResponse(
                 id: request.id,
                 success: summary.toolCallsSucceeded > 0 || modelRes.toolCalls.isEmpty,
                 responseText: finalMessage,
                 badge: modelRes.badge,
-                latencyMs: elapsedMs(),
+                latencyMs: duration,
                 toolResults: summary.results
             )
         }
         
         // Conversational response without tool calls
+        let duration = elapsedMs()
+        let turn = ConversationTurn(
+            turnId: UUID(),
+            timestamp: Date(),
+            rawInput: request.utterance,
+            cleanedInput: effectiveUtterance,
+            resolvedIntent: nil,
+            toolInvocations: [],
+            assistantResponse: modelRes.content,
+            tokenUsage: modelRes.usage,
+            latencyMs: duration
+        )
+        await sessionManager.recordTurn(turn, sessionID: request.sessionID)
+        
         return AssistantResponse(
             id: request.id,
             success: true,
             responseText: modelRes.content,
             badge: modelRes.badge,
-            latencyMs: elapsedMs(),
+            latencyMs: duration,
             toolResults: []
         )
     }
