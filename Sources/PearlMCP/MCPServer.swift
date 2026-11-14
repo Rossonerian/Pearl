@@ -166,7 +166,7 @@ public final class MCPServer: @unchecked Sendable {
         "battery",
         "frontmost_app",
         "open_app",
-        "close_app",
+        "undo",
         "screenshot",
         "reminder",
         "git_status"
@@ -202,7 +202,7 @@ public final class MCPServer: @unchecked Sendable {
         if registry.tool(named: "battery") == nil { registry.register(BatteryTool()) }
         if registry.tool(named: "frontmost_app") == nil { registry.register(FrontmostAppTool()) }
         if registry.tool(named: "open_app") == nil { registry.register(AppTool()) }
-        if registry.tool(named: "close_app") == nil { registry.register(CloseAppTool()) }
+        if registry.tool(named: "undo") == nil { registry.register(UndoTool()) }
         if registry.tool(named: "screenshot") == nil { registry.register(ScreenshotTool()) }
         if registry.tool(named: "reminder") == nil { registry.register(ReminderTool()) }
         if registry.tool(named: "git_status") == nil { registry.register(GitStatusTool()) }
@@ -244,16 +244,11 @@ public final class MCPServer: @unchecked Sendable {
                     required: ["app"]
                 )
             )
-        case "close_app":
+        case "undo":
             return MCPToolInfo(
                 name: tool.name,
                 description: tool.description,
-                inputSchema: ToolInputSchema(
-                    properties: [
-                        "app": ToolSchemaProperty(type: "string", description: "Application name to quit (e.g. 'Calculator')")
-                    ],
-                    required: ["app"]
-                )
+                inputSchema: ToolInputSchema(properties: [:])
             )
         case "screenshot":
             return MCPToolInfo(

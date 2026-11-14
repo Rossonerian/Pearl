@@ -84,7 +84,7 @@ public final class AppTool: PearlTool {
 public final class CloseAppTool: PearlTool {
     public let name = "close_app"
     public let description = "Quit a running application by name"
-    public let tier = ToolTier.t1Reversible
+    public let tier = ToolTier.t3WorkspaceChanges
     public let requiredTCC: [TCCService] = []
     public let isReversible = false
     

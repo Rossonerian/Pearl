@@ -91,7 +91,10 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         // 6. Setup Unix Domain Socket Server for CLI
         socketServer = UnixSocketServer(socketPath: config.socketPath)
         socketServer.onCommandHandler = { [weak self] request in
-            return self?.handleIPCRequest(request) ?? IPCResponse(id: request.id, success: false, message: "Server shutting down")
+            guard let self = self else {
+                return IPCResponse(id: request.id, success: false, message: "Server shutting down")
+            }
+            return await self.handleIPCRequest(request)
         }
         
         do {
@@ -160,31 +163,12 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         hudPanel.showPill(text: "Thinking...", thinking: true)
         
         Task {
-            var responseText = ""
+            let request = AssistantRequest(utterance: utterance, origin: .voice)
+            let response = await AssistantPipeline.shared.process(request: request)
             
-            // 1. Check deterministic router for instant action
-            if let intent = DeterministicRouter.shared.resolve(utterance: utterance) {
-                if let tool = ToolRegistry.shared.tool(named: intent.toolName) {
-                    let ctx = ToolExecutionContext(trustState: .trusted, userConfirmed: false)
-                    if let toolRes = try? await PolicyEngine.shared.execute(tool: tool, args: intent.arguments, context: ctx) {
-                        responseText = toolRes.message
-                    } else {
-                        responseText = "Execution failed."
-                    }
-                } else {
-                    responseText = "Action '\(intent.toolName)' is not available."
-                }
-            } else {
-                // 2. Fallback to Apple FM / Frontier Chain
-                let fallbackChain = FallbackChain()
-                let modelRes = await fallbackChain.process(utterance: utterance)
-                responseText = modelRes.content
-            }
-            
-            let finalReply = responseText
             await MainActor.run {
-                self.hudPanel.showPill(text: finalReply, thinking: false)
-                SpeechSynthesizerService.shared.speak(text: finalReply)
+                self.hudPanel.showPill(text: response.responseText, thinking: false)
+                SpeechSynthesizerService.shared.speak(text: response.speechText)
             }
         }
     }
@@ -232,7 +216,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApplication.shared.activate(ignoringOtherApps: true)
     }
     
-    private func handleIPCRequest(_ req: IPCRequest) -> IPCResponse {
+    private func handleIPCRequest(_ req: IPCRequest) async -> IPCResponse {
         var timebaseInfo = mach_timebase_info()
         mach_timebase_info(&timebaseInfo)
         let start = mach_continuous_time()
@@ -248,10 +232,10 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
             let uptime = Int(Date().timeIntervalSince(launchDate))
             responseData["uptime_seconds"] = "\(uptime)"
             responseData["pid"] = "\(getpid())"
-            responseData["version"] = "2.0.0"
+            responseData["version"] = "2.1.0"
             
         case "status":
-            let isVisible = DispatchQueue.main.sync { hudPanel.isPillVisible }
+            let isVisible = await MainActor.run { hudPanel.isPillVisible }
             let frontmostApp = NSWorkspace.shared.frontmostApplication?.localizedName ?? "Unknown"
             responseMessage = "Pearl Daemon Status"
             responseData["hud_visible"] = "\(isVisible)"
@@ -260,58 +244,26 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
             responseData["hotkey"] = "Ctrl+Opt+Space"
             
         case "show":
-            DispatchQueue.main.sync {
-                hudPanel.showPill(text: req.arguments?["text"] ?? "Pearl standing by", thinking: false)
+            let text = req.arguments?["text"] ?? "Pearl standing by"
+            await MainActor.run {
+                hudPanel.showPill(text: text, thinking: false)
             }
             responseMessage = "HUD panel shown"
             
         case "hide":
-            DispatchQueue.main.sync {
+            await MainActor.run {
                 hudPanel.hidePill()
             }
             responseMessage = "HUD panel hidden"
             
         case "execute":
             let query = req.arguments?["query"] ?? ""
-            if let intent = DeterministicRouter.shared.resolve(utterance: query) {
-                if let tool = ToolRegistry.shared.tool(named: intent.toolName) {
-                    let sema = DispatchSemaphore(value: 0)
-                    var toolRes: ToolResult?
-                    Task {
-                        let ctx = ToolExecutionContext(trustState: .trusted, userConfirmed: false)
-                        toolRes = try? await PolicyEngine.shared.execute(tool: tool, args: intent.arguments, context: ctx)
-                        sema.signal()
-                    }
-                    sema.wait()
-                    if let r = toolRes {
-                        responseMessage = r.message
-                        isSuccess = r.success
-                        DispatchQueue.main.async {
-                            self.hudPanel.showPill(text: r.message, thinking: false)
-                        }
-                    } else {
-                        responseMessage = "Execution failed."
-                        isSuccess = false
-                    }
-                } else {
-                    responseMessage = "Tool '\(intent.toolName)' not registered."
-                    isSuccess = false
-                }
-            } else {
-                let sema = DispatchSemaphore(value: 0)
-                let hud = self.hudPanel
-                Task {
-                    let chain = FallbackChain()
-                    let modelRes = await chain.process(utterance: query)
-                    responseMessage = modelRes.content
-                    isSuccess = true
-                    DispatchQueue.main.async {
-                        hud?.showPill(text: modelRes.content, thinking: false)
-                        SpeechSynthesizerService.shared.speak(text: modelRes.content)
-                    }
-                    sema.signal()
-                }
-                sema.wait()
+            let assistantReq = AssistantRequest(utterance: query, origin: .socket)
+            let assistantResp = await AssistantPipeline.shared.process(request: assistantReq)
+            responseMessage = assistantResp.responseText
+            isSuccess = assistantResp.success
+            await MainActor.run {
+                self.hudPanel.showPill(text: assistantResp.responseText, thinking: false)
             }
             
         case "quit":
@@ -323,21 +275,16 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         case "remember":
             let factText = req.arguments?["fact"] ?? ""
             if !factText.isEmpty {
-                let sema = DispatchSemaphore(value: 0)
-                Task {
-                    do {
-                        let store = try MemoryStore()
-                        let gate = try LearningGate(store: store)
-                        let (factId, _) = try await gate.explicitRemember(fact: factText, source: "user", trust: .trusted)
-                        responseMessage = "Remembered: '\(factText)' (id: \(factId))"
-                        responseData["id"] = factId
-                    } catch {
-                        responseMessage = "Failed to remember: \(error.localizedDescription)"
-                        isSuccess = false
-                    }
-                    sema.signal()
+                do {
+                    let store = try MemoryStore()
+                    let gate = try LearningGate(store: store)
+                    let (factId, _) = try await gate.explicitRemember(fact: factText, source: "user", trust: .trusted)
+                    responseMessage = "Remembered: '\(factText)' (id: \(factId))"
+                    responseData["id"] = factId
+                } catch {
+                    responseMessage = "Failed to remember: \(error.localizedDescription)"
+                    isSuccess = false
                 }
-                sema.wait()
             } else {
                 responseMessage = "Missing 'fact' argument"
                 isSuccess = false
@@ -346,25 +293,20 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         case "forget":
             let factId = req.arguments?["id"] ?? ""
             if !factId.isEmpty {
-                let sema = DispatchSemaphore(value: 0)
-                Task {
-                    do {
-                        let store = try MemoryStore()
-                        let gate = try LearningGate(store: store)
-                        let removed = try await gate.forget(factId: factId)
-                        if removed {
-                            responseMessage = "Forgot fact \(factId)"
-                        } else {
-                            responseMessage = "Fact \(factId) not found"
-                            isSuccess = false
-                        }
-                    } catch {
-                        responseMessage = "Failed to forget: \(error.localizedDescription)"
+                do {
+                    let store = try MemoryStore()
+                    let gate = try LearningGate(store: store)
+                    let removed = try await gate.forget(factId: factId)
+                    if removed {
+                        responseMessage = "Forgot fact \(factId)"
+                    } else {
+                        responseMessage = "Fact \(factId) not found"
                         isSuccess = false
                     }
-                    sema.signal()
+                } catch {
+                    responseMessage = "Failed to forget: \(error.localizedDescription)"
+                    isSuccess = false
                 }
-                sema.wait()
             } else {
                 responseMessage = "Missing 'id' argument"
                 isSuccess = false
@@ -372,29 +314,24 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
             
         case "memory":
             let sub = req.arguments?["subcommand"] ?? "stats"
-            let sema = DispatchSemaphore(value: 0)
-            Task {
-                do {
-                    let store = try MemoryStore()
-                    let gate = try LearningGate(store: store)
-                    let viewer = MemoryViewer(store: store, gate: gate)
-                    if sub == "export" {
-                        let json = try await viewer.exportJSON()
-                        responseMessage = json
-                    } else {
-                        let stats = try await viewer.getStats()
-                        responseMessage = "Memory Stats: \(stats.factCount) facts, \(stats.profileByteCount) profile bytes (\(stats.profileEstimatedTokens) tokens), \(stats.pendingProposalsCount) pending proposals (Schema v\(stats.schemaVersion))"
-                        responseData["fact_count"] = "\(stats.factCount)"
-                        responseData["profile_bytes"] = "\(stats.profileByteCount)"
-                        responseData["schema_version"] = "\(stats.schemaVersion)"
-                    }
-                } catch {
-                    responseMessage = "Memory operation failed: \(error.localizedDescription)"
-                    isSuccess = false
+            do {
+                let store = try MemoryStore()
+                let gate = try LearningGate(store: store)
+                let viewer = MemoryViewer(store: store, gate: gate)
+                if sub == "export" {
+                    let json = try await viewer.exportJSON()
+                    responseMessage = json
+                } else {
+                    let stats = try await viewer.getStats()
+                    responseMessage = "Memory Stats: \(stats.factCount) facts, \(stats.profileByteCount) profile bytes (\(stats.profileEstimatedTokens) tokens), \(stats.pendingProposalsCount) pending proposals (Schema v\(stats.schemaVersion))"
+                    responseData["fact_count"] = "\(stats.factCount)"
+                    responseData["profile_bytes"] = "\(stats.profileByteCount)"
+                    responseData["schema_version"] = "\(stats.schemaVersion)"
                 }
-                sema.signal()
+            } catch {
+                responseMessage = "Memory operation failed: \(error.localizedDescription)"
+                isSuccess = false
             }
-            sema.wait()
             
         default:
             responseMessage = "Unhandled command: \(cmd)"

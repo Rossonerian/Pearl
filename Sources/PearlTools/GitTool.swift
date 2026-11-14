@@ -4,7 +4,7 @@ import PearlCore
 public final class GitTool: PearlTool {
     public let name = "git"
     public let description = "Check repository status and active branch in registered projects or current directory"
-    public let tier = ToolTier.t3WorkspaceChanges
+    public let tier = ToolTier.t0Observe
     public let requiredTCC: [TCCService] = []
     public let isReversible = false
     

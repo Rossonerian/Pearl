@@ -59,12 +59,23 @@ public struct AuditRecord: Codable, Sendable {
     }
 }
 
+/// Actor managing the SHA-256 hash-chained tamper-evident audit log.
+///
+/// Features:
+/// - Full-chain verification from genesis on startup before appending.
+/// - Fail-safe quarantine and explicit `isChainCorrupted` state if tampering is detected.
+/// - Secret redaction prior to hashing and serialization.
+/// - Durable `fsync` (`synchronize()`) disk writes.
 public actor AuditLogger {
     public static let shared = AuditLogger()
+    public static let genesisHash = "0000000000000000000000000000000000000000000000000000000000000000"
     
-    private var lastHash: String = "0000000000000000000000000000000000000000000000000000000000000000"
+    private var lastHash: String = AuditLogger.genesisHash
     private var currentSeq: Int = 0
     private let logFileURL: URL
+    
+    public private(set) var isChainCorrupted: Bool = false
+    public private(set) var chainIntegrityError: String? = nil
     
     public init() {
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
@@ -73,20 +84,42 @@ public actor AuditLogger {
             .posixPermissions: 0o700
         ])
         self.logFileURL = dir.appendingPathComponent("audit.log")
-        let (seq, hash) = AuditLogger.readLastState(from: self.logFileURL)
-        self.currentSeq = seq
-        self.lastHash = hash
+        
+        // 1. Perform full-chain verification on boot
+        if FileManager.default.fileExists(atPath: self.logFileURL.path) {
+            let verification = AuditLogVerifier.shared.verifyFile(at: self.logFileURL)
+            if !verification.isValid {
+                self.isChainCorrupted = true
+                self.chainIntegrityError = verification.failureReason
+                NSLog("[AuditLogger] CRITICAL SECURITY ALERT: Audit log hash-chain verification failed! Reason: %@", verification.failureReason ?? "Unknown corruption")
+                
+                // Fail-safe quarantine: rotate corrupted log so attacker cannot obscure history
+                let timestamp = ISO8601DateFormatter().string(from: Date()).replacingOccurrences(of: ":", with: "-")
+                let quarantinedURL = dir.appendingPathComponent("audit_corrupted_\(timestamp).log")
+                try? FileManager.default.moveItem(at: self.logFileURL, to: quarantinedURL)
+                
+                self.currentSeq = 0
+                self.lastHash = AuditLogger.genesisHash
+            } else {
+                let (seq, hash) = AuditLogger.readLastState(from: self.logFileURL)
+                self.currentSeq = seq
+                self.lastHash = hash
+            }
+        } else {
+            self.currentSeq = 0
+            self.lastHash = AuditLogger.genesisHash
+        }
     }
     
     private nonisolated static func readLastState(from logFileURL: URL) -> (seq: Int, hash: String) {
         guard let data = try? Data(contentsOf: logFileURL),
               let content = String(data: data, encoding: .utf8) else {
-            return (0, "0000000000000000000000000000000000000000000000000000000000000000")
+            return (0, AuditLogger.genesisHash)
         }
         let lines = content.components(separatedBy: .newlines).filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
         guard let lastLine = lines.last,
               let record = try? JSONDecoder().decode(AuditRecord.self, from: Data(lastLine.utf8)) else {
-            return (0, "0000000000000000000000000000000000000000000000000000000000000000")
+            return (0, AuditLogger.genesisHash)
         }
         return (record.seq, record.entryHash)
     }
@@ -131,17 +164,19 @@ public actor AuditLogger {
         
         lastHash = hashString
         
+        // Durable, fsync-guaranteed disk append
         if let lineData = try? JSONEncoder().encode(record),
            var lineStr = String(data: lineData, encoding: .utf8) {
             lineStr.append("\n")
-            if let fileHandle = try? FileHandle(forWritingTo: logFileURL) {
-                fileHandle.seekToEndOfFile()
-                if let writeData = lineStr.data(using: .utf8) {
+            if let writeData = lineStr.data(using: .utf8) {
+                if let fileHandle = try? FileHandle(forWritingTo: logFileURL) {
+                    fileHandle.seekToEndOfFile()
                     fileHandle.write(writeData)
+                    try? fileHandle.synchronize()
+                    try? fileHandle.close()
+                } else {
+                    try? writeData.write(to: logFileURL, options: .atomic)
                 }
-                try? fileHandle.close()
-            } else {
-                try? lineStr.write(to: logFileURL, atomically: true, encoding: .utf8)
             }
         }
     }

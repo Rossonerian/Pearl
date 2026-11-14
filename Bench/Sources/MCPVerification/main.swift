@@ -116,8 +116,8 @@ struct MCPVerificationRunner {
         print("  Discovered \(toolNames.count) tools: \(toolNames.joined(separator: ", "))")
         
         let expectedTools = [
-            "battery", "close_app", "frontmost_app", "git_status",
-            "open_app", "reminder", "screenshot", "volume"
+            "battery", "frontmost_app", "git_status",
+            "open_app", "reminder", "screenshot", "undo", "volume"
         ]
         
         for expected in expectedTools {

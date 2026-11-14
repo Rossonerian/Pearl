@@ -68,14 +68,19 @@ public final class DeterministicRouter: Sendable {
     public func resolve(utterance: String) -> ResolvedIntent? {
         let trimmed = utterance.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
-        let lower = trimmed.lowercased()
+        let rawLower = trimmed.lowercased()
         
         // 1. Negation Guard: never execute on negated requests
         for neg in negationPatterns {
-            if lower.hasPrefix(neg) || lower.contains(" " + neg + " ") {
+            if rawLower.hasPrefix(neg) || rawLower.contains(" " + neg + " ") {
                 return nil
             }
         }
+        
+        // Clean wake words and politeness prefixes/suffixes
+        let cleaned = cleanUtterance(trimmed)
+        guard !cleaned.isEmpty else { return nil }
+        let lower = cleaned.lowercased()
         
         // 2. Undo Intent
         if lower == "undo" || lower == "undo that" || lower == "revert that" {
@@ -83,12 +88,12 @@ public final class DeterministicRouter: Sendable {
         }
         
         // 3. Battery Intent
-        if lower.contains("battery") || lower.contains("power level") || lower.contains("charging") {
+        if lower.contains("battery") || lower.contains("power level") || lower.contains("charging") || lower.contains("plugged into power") {
             return ResolvedIntent(toolName: "battery", arguments: [:], confidence: 1.0)
         }
         
         // 4. Volume Intent
-        if lower.contains("mute") || lower == "silence" {
+        if lower.contains("mute") || lower == "silence" || lower.contains("turn sound off") || lower.contains("sound off") {
             return ResolvedIntent(toolName: "volume", arguments: ["level": "0"], confidence: 1.0)
         }
         if lower.contains("unmute") {
@@ -104,36 +109,63 @@ public final class DeterministicRouter: Sendable {
            lower.contains("delete") && lower.contains("screenshot") {
             return ResolvedIntent(toolName: "trash_screenshots", arguments: [:], confidence: 1.0)
         }
-        if lower.contains("screenshot") || lower.contains("capture screen") || lower.contains("grab screen") {
+        if lower.contains("screenshot") || lower.contains("capture screen") || lower.contains("capture display") || lower.contains("capture my screen") || lower.contains("grab screen") {
             return ResolvedIntent(toolName: "screenshot", arguments: [:], confidence: 1.0)
         }
         
         // 6. Application Launch / Quit
         if lower.hasPrefix("open ") || lower.hasPrefix("launch ") {
-            let appName = String(trimmed.dropFirst(trimmed.hasPrefix("launch ") ? 7 : 5)).trimmingCharacters(in: .whitespaces)
+            let appName = String(cleaned.dropFirst(cleaned.hasPrefix("launch ") ? 7 : 5)).trimmingCharacters(in: .whitespaces)
             return ResolvedIntent(toolName: "open_app", arguments: ["app": appName], confidence: 0.98)
         }
         if lower.hasPrefix("close ") || lower.hasPrefix("quit ") {
-            let appName = String(trimmed.dropFirst(trimmed.hasPrefix("close ") ? 6 : 5)).trimmingCharacters(in: .whitespaces)
+            let appName = String(cleaned.dropFirst(cleaned.hasPrefix("close ") ? 6 : 5)).trimmingCharacters(in: .whitespaces)
             return ResolvedIntent(toolName: "close_app", arguments: ["app": appName], confidence: 0.98)
         }
         
-        // 7. Git Actions
+        // 7. Git Actions (status observation)
         if lower.contains("git status") || lower.contains("git branch") || lower.contains("working tree") || lower.contains("repo status") {
             return ResolvedIntent(toolName: "git", arguments: ["subcommand": "status"], confidence: 1.0)
         }
         
         // 8. Reminders
         if lower.hasPrefix("remind me to ") {
-            let text = String(trimmed.dropFirst(13)).trimmingCharacters(in: .whitespaces)
+            let text = String(cleaned.dropFirst(13)).trimmingCharacters(in: .whitespaces)
             return ResolvedIntent(toolName: "reminder", arguments: ["title": text], confidence: 0.95)
         }
         if lower.hasPrefix("create reminder ") || lower.hasPrefix("add reminder ") {
-            let text = String(trimmed.dropFirst(16)).trimmingCharacters(in: .whitespaces)
+            let text = String(cleaned.dropFirst(16)).trimmingCharacters(in: .whitespaces)
             return ResolvedIntent(toolName: "reminder", arguments: ["title": text], confidence: 0.95)
         }
         
         return nil
+    }
+    
+    private func cleanUtterance(_ utterance: String) -> String {
+        var text = utterance.trimmingCharacters(in: .whitespacesAndNewlines)
+        let prefixes = [
+            "hey pearl, ", "hey pearl ", "pearl, ", "pearl ",
+            "please, ", "please ",
+            "could you please ", "could you ",
+            "can you please ", "can you "
+        ]
+        var changed = true
+        while changed {
+            changed = false
+            for p in prefixes {
+                if text.lowercased().hasPrefix(p) {
+                    text = String(text.dropFirst(p.count)).trimmingCharacters(in: .whitespacesAndNewlines)
+                    changed = true
+                }
+            }
+        }
+        let suffixes = [" please", ", please"]
+        for s in suffixes {
+            if text.lowercased().hasSuffix(s) {
+                text = String(text.dropLast(s.count)).trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+        }
+        return text
     }
     
     private func extractVolumeLevel(from text: String) -> Int? {
