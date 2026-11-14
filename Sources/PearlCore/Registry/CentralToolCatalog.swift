@@ -77,14 +77,164 @@ public final class CentralToolCatalog: @unchecked Sendable {
     private var metadataMap: [String: ToolMetadata] = [:]
     private let lock = NSLock()
     
-    public init() {}
+    public init() {
+        registerCanonicalMetadata()
+    }
+    
+    /// Pre-populates the catalog with canonical metadata for standard native macOS capability tools.
+    public func registerCanonicalMetadata() {
+        lock.lock()
+        defer { lock.unlock() }
+        
+        let canonicalList: [ToolMetadata] = [
+            ToolMetadata(
+                name: "list_calendar_events",
+                description: "List calendar events for a time window (e.g. today, tomorrow, next N days)",
+                arguments: [
+                    ToolArgumentDescriptor(name: "time_window", description: "Time window (today, tomorrow, this week, next N days)"),
+                    ToolArgumentDescriptor(name: "start_date", description: "Start date/time (ISO 8601 or yyyy-MM-dd HH:mm)"),
+                    ToolArgumentDescriptor(name: "end_date", description: "End date/time (ISO 8601 or yyyy-MM-dd HH:mm)")
+                ],
+                tier: .t0Observe,
+                requiredTCC: [.calendar],
+                isReversible: false,
+                requiresConfirmation: false,
+                nativeAssistantExposed: true,
+                cliExposed: true,
+                mcpExposed: true
+            ),
+            ToolMetadata(
+                name: "check_calendar_availability",
+                description: "Check for schedule conflicts within a specific date/time range",
+                arguments: [
+                    ToolArgumentDescriptor(name: "start_date", description: "Proposed slot start date/time", isRequired: true),
+                    ToolArgumentDescriptor(name: "end_date", description: "Proposed slot end date/time"),
+                    ToolArgumentDescriptor(name: "duration", description: "Slot duration (e.g. 30m, 1h)")
+                ],
+                tier: .t0Observe,
+                requiredTCC: [.calendar],
+                isReversible: false,
+                requiresConfirmation: false,
+                nativeAssistantExposed: true,
+                cliExposed: true,
+                mcpExposed: true
+            ),
+            ToolMetadata(
+                name: "create_calendar_event",
+                description: "Create calendar event with title, startDate, endDate, location, notes with instant undo",
+                arguments: [
+                    ToolArgumentDescriptor(name: "title", description: "Event title or summary", isRequired: true),
+                    ToolArgumentDescriptor(name: "start_date", description: "Start date/time", isRequired: true),
+                    ToolArgumentDescriptor(name: "end_date", description: "End date/time"),
+                    ToolArgumentDescriptor(name: "duration", description: "Event duration"),
+                    ToolArgumentDescriptor(name: "location", description: "Physical location or URL"),
+                    ToolArgumentDescriptor(name: "notes", description: "Notes or description")
+                ],
+                tier: .t1Reversible,
+                requiredTCC: [.calendar],
+                isReversible: true,
+                requiresConfirmation: false,
+                supportsUndo: true,
+                nativeAssistantExposed: true,
+                cliExposed: true,
+                mcpExposed: true
+            ),
+            ToolMetadata(
+                name: "delete_calendar_event",
+                description: "Cancel or delete a calendar event by ID or title (requires explicit confirmation)",
+                arguments: [
+                    ToolArgumentDescriptor(name: "id", description: "Event ID to delete"),
+                    ToolArgumentDescriptor(name: "title", description: "Event title to delete"),
+                    ToolArgumentDescriptor(name: "confirm", description: "Confirmation flag ('true')")
+                ],
+                tier: .t2ReadPersonal,
+                requiredTCC: [.calendar],
+                isReversible: false,
+                requiresConfirmation: true,
+                supportsUndo: false,
+                nativeAssistantExposed: true,
+                cliExposed: true,
+                mcpExposed: true
+            ),
+            ToolMetadata(
+                name: "get_display_info",
+                description: "Inspect NSScreen and CoreGraphics to report active display resolution, nominal refresh rate, scale factor, and color appearance",
+                arguments: [
+                    ToolArgumentDescriptor(name: "detailed", description: "Include all displays")
+                ],
+                tier: .t0Observe,
+                requiredTCC: [],
+                isReversible: false,
+                requiresConfirmation: false,
+                nativeAssistantExposed: true,
+                cliExposed: true,
+                mcpExposed: true
+            ),
+            ToolMetadata(
+                name: "read_clipboard",
+                description: "Read NSPasteboard content, automatically redacting detected secrets",
+                arguments: [
+                    ToolArgumentDescriptor(name: "max_length", description: "Maximum characters to read")
+                ],
+                tier: .t0Observe,
+                requiredTCC: [],
+                isReversible: false,
+                requiresConfirmation: false,
+                nativeAssistantExposed: true,
+                cliExposed: true,
+                mcpExposed: true
+            ),
+            ToolMetadata(
+                name: "write_clipboard",
+                description: "Write text to NSPasteboard, saving previous clipboard content in UndoJournal to restore on undo",
+                arguments: [
+                    ToolArgumentDescriptor(name: "text", description: "Text content to write", isRequired: true)
+                ],
+                tier: .t1Reversible,
+                requiredTCC: [],
+                isReversible: true,
+                requiresConfirmation: false,
+                supportsUndo: true,
+                nativeAssistantExposed: true,
+                cliExposed: true,
+                mcpExposed: true
+            ),
+            ToolMetadata(
+                name: "post_notification",
+                description: "Post a native system notification via UserNotifications or NSUserNotification",
+                arguments: [
+                    ToolArgumentDescriptor(name: "title", description: "Notification title"),
+                    ToolArgumentDescriptor(name: "message", description: "Notification message", isRequired: true),
+                    ToolArgumentDescriptor(name: "subtitle", description: "Optional subtitle"),
+                    ToolArgumentDescriptor(name: "sound", description: "Play sound ('true')")
+                ],
+                tier: .t0Observe,
+                requiredTCC: [],
+                isReversible: false,
+                requiresConfirmation: false,
+                nativeAssistantExposed: true,
+                cliExposed: true,
+                mcpExposed: true
+            )
+        ]
+        
+        for meta in canonicalList {
+            metadataMap[meta.name.lowercased()] = meta
+        }
+    }
+    
+    public func registerMetadata(_ metadata: ToolMetadata) {
+        lock.lock()
+        defer { lock.unlock() }
+        metadataMap[metadata.name.lowercased()] = metadata
+    }
     
     public func register(_ tool: any PearlTool, metadata: ToolMetadata? = nil) {
         lock.lock()
         defer { lock.unlock() }
         let key = tool.name.lowercased()
         tools[key] = tool
-        let meta = metadata ?? ToolMetadata(
+        let meta = metadata ?? metadataMap[key] ?? ToolMetadata(
             name: tool.name,
             description: tool.description,
             arguments: tool.argumentDescriptors,
