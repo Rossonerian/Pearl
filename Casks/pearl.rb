@@ -1,6 +1,6 @@
 cask "pearl" do
   version "3.2.0"
-  sha256 "21bc0c93f9fb899152dafe2dee0407016157c5515864faf5d01c0d1da70f5dd2"
+  sha256 "e20b82bfdb27570c428259ca215262716e48579403edab9841ffecd4dad0314a"
 
   url "https://github.com/rossonerian/Pearl/releases/download/v#{version}/Pearl-#{version}.dmg"
   name "Pearl"
