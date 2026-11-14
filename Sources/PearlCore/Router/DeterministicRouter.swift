@@ -189,6 +189,26 @@ public final class DeterministicRouter: Sendable {
             return ResolvedIntent(toolName: "read_clipboard", arguments: [:], confidence: 1.0)
         }
         
+        // 15. V3.2 Vault, Persona, Dream & Cache Shortcuts (exact-match, post-negation guard)
+        if lower == "list vault notes" || lower == "show vault notes" {
+            return ResolvedIntent(toolName: "vault_list", arguments: [:], confidence: 1.0)
+        }
+        if lower == "switch to ultron mode" || lower == "ultron mode" {
+            return ResolvedIntent(toolName: "set_persona", arguments: ["mode": "ultron"], confidence: 1.0)
+        }
+        if lower == "switch to executive mode" || lower == "executive mode" {
+            return ResolvedIntent(toolName: "set_persona", arguments: ["mode": "executive"], confidence: 1.0)
+        }
+        if lower == "switch to jarvis mode" || lower == "jarvis mode" {
+            return ResolvedIntent(toolName: "set_persona", arguments: ["mode": "jarvis"], confidence: 1.0)
+        }
+        if lower == "dream" || lower == "run dream" || lower == "synthesize memories" {
+            return ResolvedIntent(toolName: "dream_synthesis", arguments: [:], confidence: 1.0)
+        }
+        if lower == "cache stats" || lower == "show cache stats" {
+            return ResolvedIntent(toolName: "cache_stats", arguments: [:], confidence: 1.0)
+        }
+        
         return nil
     }
     

@@ -72,7 +72,7 @@ func sendIPC(command: String, args: [String: String]? = nil) -> (response: IPCRe
 let args = Array(CommandLine.arguments.dropFirst())
 guard !args.isEmpty else {
     print("""
-    Pearl CLI (v3.1)
+    Pearl CLI (v3.2)
     Usage:
       pearl ping                  Check daemon status & latency
       pearl status                Show resident memory & active state
@@ -86,6 +86,14 @@ guard !args.isEmpty else {
       pearl tasks [list|create|done|delete] Manage local SQLite tasks
       pearl brief                 Generate executive morning briefing
       pearl skills [list|run <name>] Manage or execute user skills/macros
+      pearl recipes [list|show <name>|run <name>|delete <name>] Parameterized recipes
+      pearl review [list|show <id>|approve <id>|reject <id>] Skill proposal diff queue
+      pearl persona [show|executive|ultron|jarvis] Switch assistant persona
+      pearl vault [list|read <name>|write <name> <text>|search <q>] Obsidian PearlVault
+      pearl dream                 Synthesize cross-memory links into vault Dreams note
+      pearl subbots <search|scrape|crawl|map|monitor> <target> Parallel web research bots
+      pearl cache [stats|clear]   Inspect or clear TTL cache namespaces
+      pearl metrics               Display p50/p95/p99 latency telemetry
       pearl nudges                Evaluate proactive nudges & quiet hours
       pearl jobs list             Inspect running & scheduled background jobs
       pearl approvals [list|approve <id>|deny <id>] Review pending action approvals
@@ -437,6 +445,243 @@ case "approvals", "approval":
         }
         sema.wait()
     }
+case "review":
+    let sub = args.count > 1 ? args[1].lowercased() : "list"
+    var ipcArgs: [String: String] = ["subcommand": sub]
+    if args.count > 2 {
+        ipcArgs["id"] = args[2]
+    }
+    let result = sendIPC(command: "review", args: ipcArgs)
+    if let resp = result.response {
+        print(resp.message)
+        if !resp.success { exit(1) }
+    } else {
+        do {
+            switch sub {
+            case "show":
+                guard let id = ipcArgs["id"], let p = ProposalStore.shared.getProposal(id: id) else {
+                    print("Proposal not found.")
+                    exit(1)
+                }
+                print("Proposal \(p.id) [\(p.status.rawValue)] — \(p.title)\n```diff\n\(p.unifiedDiff())\n```")
+            case "approve":
+                guard let id = ipcArgs["id"] else { print("Usage: pearl review approve <id>"); exit(1) }
+                let approved = try ProposalStore.shared.approveProposal(id: id)
+                print("Approved proposal '\(approved.id)' -> \(approved.targetKind.rawValue)/\(approved.targetName).md")
+            case "reject":
+                guard let id = ipcArgs["id"] else { print("Usage: pearl review reject <id>"); exit(1) }
+                let rejected = try ProposalStore.shared.rejectProposal(id: id)
+                print("Rejected proposal '\(rejected.id)'.")
+            default:
+                let pending = ProposalStore.shared.listPending()
+                if pending.isEmpty {
+                    print("No pending skill/recipe proposals.")
+                } else {
+                    print("Pending Proposals (\(pending.count)):")
+                    for p in pending {
+                        print("  • [\(p.changeType.rawValue)] \(p.targetKind.rawValue)/\(p.targetName).md — \(p.title) [ID: \(p.id)]")
+                    }
+                }
+            }
+        } catch {
+            print("Error: \(error.localizedDescription)")
+            exit(1)
+        }
+    }
+case "recipes", "recipe":
+    RecipeEngine.shared.ensureSeeded()
+    let sub = args.count > 1 ? args[1].lowercased() : "list"
+    var ipcArgs: [String: String] = ["subcommand": sub]
+    if args.count > 2 {
+        ipcArgs["name"] = args[2]
+    }
+    var kvMap: [String: String] = [:]
+    if sub == "run", args.count > 3 {
+        for token in args.dropFirst(3) {
+            let parts = token.split(separator: "=", maxSplits: 1).map(String.init)
+            if parts.count == 2 {
+                kvMap[parts[0]] = parts[1]
+            }
+        }
+        if let jsonData = try? JSONEncoder().encode(kvMap), let jsonStr = String(data: jsonData, encoding: .utf8) {
+            ipcArgs["arguments"] = jsonStr
+        }
+    }
+    let result = sendIPC(command: "recipes", args: ipcArgs)
+    if let resp = result.response {
+        print(resp.message)
+        if !resp.success { exit(1) }
+    } else {
+        do {
+            switch sub {
+            case "show":
+                guard let name = ipcArgs["name"], let r = RecipeEngine.shared.readRecipe(name: name) else {
+                    print("Recipe not found.")
+                    exit(1)
+                }
+                print("Recipe '\(r.name)' — \(r.description)\nInputs: \(r.inputs.joined(separator: ", "))\n\n\(r.body)")
+            case "run":
+                guard let name = ipcArgs["name"] else { print("Usage: pearl recipes run <name> [key=value...]"); exit(1) }
+                let rendered = try RecipeEngine.shared.renderRecipe(name: name, arguments: kvMap)
+                print(rendered)
+            case "delete":
+                guard let name = ipcArgs["name"] else { print("Usage: pearl recipes delete <name>"); exit(1) }
+                try RecipeEngine.shared.deleteRecipe(name: name)
+                print("Deleted recipe '\(name)'.")
+            default:
+                let recipes = RecipeEngine.shared.loadRecipes()
+                print("Recipes (\(recipes.count)):")
+                for r in recipes {
+                    print("  • \(r.name) — \(r.description)")
+                }
+            }
+        } catch {
+            print("Error: \(error.localizedDescription)")
+            exit(1)
+        }
+    }
+case "persona":
+    let modeArg: String
+    if args.count > 2 && args[1].lowercased() == "set" {
+        modeArg = args[2].lowercased()
+    } else if args.count > 1 {
+        modeArg = args[1].lowercased()
+    } else {
+        modeArg = "show"
+    }
+    let result = sendIPC(command: "persona", args: ["mode": modeArg])
+    if let resp = result.response {
+        print(resp.message)
+        if !resp.success { exit(1) }
+    } else {
+        if modeArg == "show" {
+            let mode = PersonaEngine.shared.activeMode
+            print("Active persona: \(mode.displayName) (\(mode.rawValue)) — \(mode.description)")
+        } else if let mode = PersonaMode(rawValue: modeArg) {
+            PersonaEngine.shared.setMode(mode)
+            var cfg = PearlConfig.load()
+            cfg.activePersona = mode.rawValue
+            cfg.save()
+            print("Persona switched to \(mode.displayName) — \(mode.description)")
+        } else {
+            print("Unknown persona '\(modeArg)'. Valid options: executive, ultron, jarvis")
+            exit(1)
+        }
+    }
+case "vault":
+    let sub = args.count > 1 ? args[1].lowercased() : "list"
+    var ipcArgs: [String: String] = ["subcommand": sub]
+    if sub == "read", args.count > 2 {
+        ipcArgs["name"] = args[2]
+    } else if sub == "write", args.count > 3 {
+        ipcArgs["name"] = args[2]
+        ipcArgs["content"] = args.dropFirst(3).joined(separator: " ")
+    } else if sub == "search", args.count > 2 {
+        ipcArgs["query"] = args.dropFirst(2).joined(separator: " ")
+    }
+    let result = sendIPC(command: "vault", args: ipcArgs)
+    if let resp = result.response {
+        print(resp.message)
+        if !resp.success { exit(1) }
+    } else {
+        do {
+            switch sub {
+            case "read":
+                guard let name = ipcArgs["name"], let body = VaultManager.shared.readNote(name: name) else {
+                    print("Vault note not found.")
+                    exit(1)
+                }
+                print(body)
+            case "write":
+                guard let name = ipcArgs["name"], let content = ipcArgs["content"] else {
+                    print("Usage: pearl vault write <name> <text>")
+                    exit(1)
+                }
+                try VaultManager.shared.writeNote(name: name, content: content)
+                print("Wrote note '\(name)' to PearlVault.")
+            case "search":
+                let q = ipcArgs["query"] ?? ""
+                let hits = VaultManager.shared.searchNotes(query: q)
+                for h in hits {
+                    print("  • \(h.file): \(h.snippet)")
+                }
+            default:
+                let notes = VaultManager.shared.listNotes()
+                print("PearlVault Notes (\(notes.count)):")
+                for n in notes { print("  • \(n)") }
+            }
+        } catch {
+            print("Error: \(error.localizedDescription)")
+            exit(1)
+        }
+    }
+case "dream":
+    let result = sendIPC(command: "dream")
+    if let resp = result.response {
+        print(resp.message)
+        if !resp.success { exit(1) }
+    } else {
+        let sema = DispatchSemaphore(value: 0)
+        Task {
+            do {
+                let engine = DreamEngine(vaultManager: .shared, memoryStore: try? MemoryStore())
+                let dream = try await engine.synthesizeDream()
+                print("Dream Synthesis complete: \(dream.title)\nSaved to: \(dream.savedNotePath)")
+            } catch {
+                print("Dream synthesis skipped: \(error.localizedDescription)")
+            }
+            sema.signal()
+        }
+        sema.wait()
+    }
+case "subbots", "subbot":
+    guard args.count >= 3 else {
+        print("Usage: pearl subbots <search|scrape|crawl|map|monitor> <target>")
+        exit(1)
+    }
+    let botTypeRaw = args[1].lowercased()
+    let target = args.dropFirst(2).joined(separator: " ")
+    let result = sendIPC(command: "subbots", args: ["bot_type": botTypeRaw, "target": target])
+    if let resp = result.response {
+        print(resp.message)
+        if !resp.success { exit(1) }
+    } else if let botType = SubBotType(rawValue: botTypeRaw) {
+        let sema = DispatchSemaphore(value: 0)
+        Task {
+            let task = SubBotTask(
+                botType: botType,
+                targets: botType == .search ? [] : [target],
+                query: botType == .search ? target : nil
+            )
+            let res = await SubBotManager.shared.runBatch([task])
+            print(res.first?.markdownContent ?? res.first?.error ?? "SubBot failed.")
+            sema.signal()
+        }
+        sema.wait()
+    } else {
+        print("Invalid bot type '\(botTypeRaw)'. Choose: search, scrape, crawl, map, monitor")
+        exit(1)
+    }
+case "cache":
+    let sub = args.count > 1 ? args[1].lowercased() : "stats"
+    let result = sendIPC(command: "cache", args: ["subcommand": sub])
+    if let resp = result.response {
+        print(resp.message)
+    } else {
+        if sub == "clear" {
+            CacheManager.shared.clearAll()
+            print("All Pearl caches cleared.")
+        } else {
+            print(CacheManager.shared.formattedSummary())
+        }
+    }
+case "metrics":
+    let result = sendIPC(command: "metrics")
+    if let resp = result.response {
+        print(resp.message)
+    } else {
+        print(PerformanceMonitor.shared.formattedSummary())
+    }
 case "abort":
     let result = sendIPC(command: "abort")
     if let resp = result.response {
@@ -453,7 +698,8 @@ case "quit":
         exit(1)
     }
 default:
-    let fullQuery = args.joined(separator: " ")
+    let queryArgs = (args[0].lowercased() == "ask" && args.count > 1) ? Array(args.dropFirst()) : args
+    let fullQuery = queryArgs.joined(separator: " ")
     let result = sendIPC(command: "execute", args: ["query": fullQuery])
     if let resp = result.response {
         print(resp.message)

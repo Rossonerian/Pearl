@@ -23,13 +23,19 @@ public struct PearlConfig: Codable, Sendable {
     public var quietHoursStart: Int
     public var quietHoursEnd: Int
     public var autoLeaveSeconds: Double
+    public var activePersona: String
+    public var vaultPath: String
+    public var outputDirectoryPath: String
+    public var subBotMaxConcurrency: Int
+    public var firecrawlApiKey: String?
     
     enum CodingKeys: String, CodingKey {
         case version, hotkey, socketPath, fastModelID, escalationModelID, modelProviderEndpoint, voiceLocale, preferredVoice, bargeInEnabled, pushToTalkDefault, maxContextTokens, memoryDirectory, monthlySpendCapUSD, maxTokensPerTurn, pccEnabled, mlxEnabled, mlxModelID, mlxIdleUnloadSeconds, allowedFolders, quietHoursStart, quietHoursEnd, autoLeaveSeconds
+        case activePersona, vaultPath, outputDirectoryPath, subBotMaxConcurrency, firecrawlApiKey
     }
     
     public init(
-        version: String = "3.1.0",
+        version: String = "3.2.0",
         hotkey: String = "ctrl+opt+space",
         socketPath: String = ("~/Library/Application Support/Pearl/pearl.sock" as NSString).expandingTildeInPath,
         fastModelID: String = "claude-haiku-5-5",
@@ -50,7 +56,12 @@ public struct PearlConfig: Codable, Sendable {
         allowedFolders: [String] = ["~/Documents", "~/Downloads", "~/Desktop", "~/Projects"],
         quietHoursStart: Int = 22,
         quietHoursEnd: Int = 8,
-        autoLeaveSeconds: Double = 4.0
+        autoLeaveSeconds: Double = 4.0,
+        activePersona: String = "executive",
+        vaultPath: String = ("~/Documents/PearlVault" as NSString).expandingTildeInPath,
+        outputDirectoryPath: String = ("~/Documents/PearlOutput" as NSString).expandingTildeInPath,
+        subBotMaxConcurrency: Int = 4,
+        firecrawlApiKey: String? = nil
     ) {
         self.version = version
         self.hotkey = hotkey
@@ -74,11 +85,16 @@ public struct PearlConfig: Codable, Sendable {
         self.quietHoursStart = quietHoursStart
         self.quietHoursEnd = quietHoursEnd
         self.autoLeaveSeconds = autoLeaveSeconds
+        self.activePersona = activePersona
+        self.vaultPath = vaultPath
+        self.outputDirectoryPath = outputDirectoryPath
+        self.subBotMaxConcurrency = subBotMaxConcurrency
+        self.firecrawlApiKey = firecrawlApiKey
     }
     
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        self.version = try container.decodeIfPresent(String.self, forKey: .version) ?? "3.1.0"
+        self.version = try container.decodeIfPresent(String.self, forKey: .version) ?? "3.2.0"
         self.hotkey = try container.decodeIfPresent(String.self, forKey: .hotkey) ?? "ctrl+opt+space"
         self.socketPath = try container.decodeIfPresent(String.self, forKey: .socketPath) ?? ("~/Library/Application Support/Pearl/pearl.sock" as NSString).expandingTildeInPath
         self.fastModelID = try container.decodeIfPresent(String.self, forKey: .fastModelID) ?? "claude-haiku-5-5"
@@ -100,6 +116,11 @@ public struct PearlConfig: Codable, Sendable {
         self.quietHoursStart = try container.decodeIfPresent(Int.self, forKey: .quietHoursStart) ?? 22
         self.quietHoursEnd = try container.decodeIfPresent(Int.self, forKey: .quietHoursEnd) ?? 8
         self.autoLeaveSeconds = try container.decodeIfPresent(Double.self, forKey: .autoLeaveSeconds) ?? 4.0
+        self.activePersona = try container.decodeIfPresent(String.self, forKey: .activePersona) ?? "executive"
+        self.vaultPath = try container.decodeIfPresent(String.self, forKey: .vaultPath) ?? ("~/Documents/PearlVault" as NSString).expandingTildeInPath
+        self.outputDirectoryPath = try container.decodeIfPresent(String.self, forKey: .outputDirectoryPath) ?? ("~/Documents/PearlOutput" as NSString).expandingTildeInPath
+        self.subBotMaxConcurrency = try container.decodeIfPresent(Int.self, forKey: .subBotMaxConcurrency) ?? 4
+        self.firecrawlApiKey = try container.decodeIfPresent(String.self, forKey: .firecrawlApiKey)
     }
     
     public static var defaultConfigurationDirectory: URL {

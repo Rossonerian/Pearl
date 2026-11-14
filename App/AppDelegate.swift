@@ -128,7 +128,11 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         memSource.resume()
         memoryPressureSource = memSource
         
-        // 7. V3.1 Skill Engine & Global KillSwitch Wiring
+        // 7. V3.2 Skill, Recipe, Persona & Global KillSwitch Wiring
+        if let savedMode = PersonaMode(rawValue: PearlConfig.load().activePersona.lowercased()) {
+            PersonaEngine.shared.setMode(savedMode)
+        }
+        RecipeEngine.shared.ensureSeeded()
         Task {
             try? await SkillEngine.shared.seedDefaultSkillsIfEmpty()
         }
@@ -359,7 +363,8 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
             let uptime = Int(Date().timeIntervalSince(launchDate))
             responseData["uptime_seconds"] = "\(uptime)"
             responseData["pid"] = "\(getpid())"
-            responseData["version"] = "3.1.0"
+            responseData["version"] = "3.2.0"
+            responseData["persona"] = PersonaEngine.shared.activeMode.rawValue
             
         case "status":
             let isVisible = await MainActor.run { hudPanel.isPillVisible }
@@ -563,6 +568,179 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
                 responseMessage = "Approvals operation failed: \(error.localizedDescription)"
                 isSuccess = false
             }
+            
+        case "review":
+            let sub = req.arguments?["subcommand"] ?? "list"
+            let propId = req.arguments?["id"] ?? ""
+            do {
+                switch sub {
+                case "show":
+                    if let p = ProposalStore.shared.getProposal(id: propId) {
+                        responseMessage = "Proposal \(p.id) [\(p.status.rawValue)] — \(p.title) (\(p.targetKind.rawValue): \(p.targetName).md)\nExplanation: \(p.explanation)\n\n```diff\n\(p.unifiedDiff())\n```"
+                    } else {
+                        responseMessage = "Proposal '\(propId)' not found."
+                        isSuccess = false
+                    }
+                case "approve":
+                    let approved = try ProposalStore.shared.approveProposal(id: propId)
+                    SkillEngine.shared.invalidateIndex()
+                    responseMessage = "Approved proposal '\(approved.id)' -> wrote \(approved.targetKind.rawValue)/\(approved.targetName).md"
+                case "reject":
+                    let rejected = try ProposalStore.shared.rejectProposal(id: propId)
+                    responseMessage = "Rejected proposal '\(rejected.id)' (\(rejected.targetName))."
+                default:
+                    let pending = ProposalStore.shared.listPending()
+                    if pending.isEmpty {
+                        responseMessage = "No pending skill/recipe proposals."
+                    } else {
+                        let lines = pending.map { "• [\($0.changeType.rawValue)] \($0.targetKind.rawValue)/\($0.targetName).md — \($0.title) [ID: \($0.id)]" }
+                        responseMessage = "Pending Proposals (\(pending.count)):\n" + lines.joined(separator: "\n")
+                    }
+                }
+            } catch {
+                responseMessage = "Review operation failed: \(error.localizedDescription)"
+                isSuccess = false
+            }
+            
+        case "recipes":
+            RecipeEngine.shared.ensureSeeded()
+            let sub = req.arguments?["subcommand"] ?? "list"
+            let name = req.arguments?["name"] ?? ""
+            do {
+                switch sub {
+                case "show":
+                    if let r = RecipeEngine.shared.readRecipe(name: name) {
+                        let inputsText = r.inputs.isEmpty ? "none" : r.inputs.joined(separator: ", ")
+                        responseMessage = "Recipe '\(r.name)' — \(r.description)\nTriggers: \(r.triggers.joined(separator: ", "))\nInputs: \(inputsText)\n\n\(r.body)"
+                    } else {
+                        responseMessage = "Recipe '\(name)' not found."
+                        isSuccess = false
+                    }
+                case "run":
+                    var argsMap: [String: String] = [:]
+                    if let rawJSON = req.arguments?["arguments"], let data = rawJSON.data(using: .utf8),
+                       let decoded = try? JSONDecoder().decode([String: String].self, from: data) {
+                        argsMap = decoded
+                    }
+                    let rendered = try RecipeEngine.shared.renderRecipe(name: name, arguments: argsMap)
+                    responseMessage = "Rendered recipe '\(name)':\n\n\(rendered)"
+                case "delete":
+                    try RecipeEngine.shared.deleteRecipe(name: name)
+                    responseMessage = "Deleted recipe '\(name)'."
+                default:
+                    let all = RecipeEngine.shared.loadRecipes()
+                    if all.isEmpty {
+                        responseMessage = "No recipes installed."
+                    } else {
+                        let lines = all.map { "• \($0.name) — \($0.description) [inputs: \($0.inputs.isEmpty ? "none" : $0.inputs.joined(separator: ", "))]" }
+                        responseMessage = "Recipes (\(all.count)):\n" + lines.joined(separator: "\n")
+                    }
+                }
+            } catch {
+                responseMessage = "Recipe operation failed: \(error.localizedDescription)"
+                isSuccess = false
+            }
+            
+        case "persona":
+            let modeArg = (req.arguments?["mode"] ?? "show").lowercased()
+            if modeArg == "show" || modeArg.isEmpty {
+                let active = PersonaEngine.shared.activeMode
+                responseMessage = "Active persona: \(active.displayName) (\(active.rawValue)) — \(active.description)"
+                responseData["persona"] = active.rawValue
+            } else if let mode = PersonaMode(rawValue: modeArg) {
+                PersonaEngine.shared.setMode(mode)
+                var cfg = PearlConfig.load()
+                cfg.activePersona = mode.rawValue
+                cfg.save()
+                responseMessage = "Persona switched to \(mode.displayName) — \(mode.description)"
+                responseData["persona"] = mode.rawValue
+            } else {
+                responseMessage = "Unknown persona '\(modeArg)'. Valid options: executive, ultron, jarvis"
+                isSuccess = false
+            }
+            
+        case "vault":
+            let sub = req.arguments?["subcommand"] ?? "list"
+            let name = req.arguments?["name"] ?? ""
+            do {
+                switch sub {
+                case "read":
+                    if let text = VaultManager.shared.readNote(name: name) {
+                        responseMessage = text
+                    } else {
+                        responseMessage = "Vault note '\(name)' not found."
+                        isSuccess = false
+                    }
+                case "write":
+                    let content = req.arguments?["content"] ?? ""
+                    try VaultManager.shared.writeNote(name: name, content: content)
+                    responseMessage = "Wrote note '\(name)' to PearlVault."
+                case "search":
+                    let query = req.arguments?["query"] ?? name
+                    let hits = VaultManager.shared.searchNotes(query: query)
+                    if hits.isEmpty {
+                        responseMessage = "No vault notes matched '\(query)'."
+                    } else {
+                        let lines = hits.prefix(15).map { "• \($0.file): \($0.snippet)" }
+                        responseMessage = "Vault matches (\(hits.count)):\n" + lines.joined(separator: "\n")
+                    }
+                default:
+                    let notes = VaultManager.shared.listNotes()
+                    if notes.isEmpty {
+                        responseMessage = "PearlVault is empty (\(PearlConfig.load().vaultPath))."
+                    } else {
+                        responseMessage = "PearlVault Notes (\(notes.count)):\n" + notes.map { "• \($0)" }.joined(separator: "\n")
+                    }
+                }
+            } catch {
+                responseMessage = "Vault operation failed: \(error.localizedDescription)"
+                isSuccess = false
+            }
+            
+        case "dream":
+            do {
+                let store = try? MemoryStore()
+                let engine = DreamEngine(vaultManager: .shared, memoryStore: store)
+                let dream = try await engine.synthesizeDream()
+                responseMessage = "Dream Synthesis complete: \(dream.title)\nSaved to: \(dream.savedNotePath)\nThemes: \(dream.sharedThemes.joined(separator: ", "))\n\n\(dream.bridgeNarrative)"
+            } catch {
+                responseMessage = "Dream synthesis skipped: \(error.localizedDescription)"
+                isSuccess = false
+            }
+            
+        case "subbots":
+            let botStr = (req.arguments?["bot_type"] ?? "search").lowercased()
+            let target = req.arguments?["target"] ?? ""
+            if let botType = SubBotType(rawValue: botStr), !target.isEmpty {
+                let task = SubBotTask(
+                    botType: botType,
+                    targets: botType == .search ? [] : [target],
+                    query: botType == .search ? target : nil
+                )
+                let results = await SubBotManager.shared.runBatch([task])
+                if let first = results.first {
+                    isSuccess = first.success
+                    responseMessage = first.success ? first.markdownContent : (first.error ?? "SubBot failed.")
+                } else {
+                    isSuccess = false
+                    responseMessage = "SubBot produced no output."
+                }
+            } else {
+                isSuccess = false
+                responseMessage = "Usage: subbots <search|scrape|crawl|map|monitor> <target>"
+            }
+            
+        case "cache":
+            let sub = req.arguments?["subcommand"] ?? "stats"
+            if sub == "clear" {
+                CacheManager.shared.clearAll()
+                responseMessage = "All Pearl caches cleared."
+            } else {
+                responseMessage = CacheManager.shared.formattedSummary()
+            }
+            
+        case "metrics":
+            responseMessage = PerformanceMonitor.shared.formattedSummary()
             
         case "abort":
             KillSwitch.shared.trigger(reason: "Aborted via CLI IPC")

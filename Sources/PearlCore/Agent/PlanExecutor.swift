@@ -33,6 +33,7 @@ public final class PlanExecutor: @unchecked Sendable {
     public let toolRegistry: ToolRegistry
     public let undoJournal: UndoJournal
     public let memoryReader: (@Sendable () -> Double)?
+    public let reportLedger: SubagentReportLedger
     
     public init(
         maxSteps: Int = 8,
@@ -43,7 +44,8 @@ public final class PlanExecutor: @unchecked Sendable {
         policyEngine: PolicyEngine = .shared,
         toolRegistry: ToolRegistry = .shared,
         undoJournal: UndoJournal = .shared,
-        memoryReader: (@Sendable () -> Double)? = nil
+        memoryReader: (@Sendable () -> Double)? = nil,
+        reportLedger: SubagentReportLedger = .shared
     ) {
         self.maxSteps = maxSteps
         self.memoryCeilingMB = memoryCeilingMB
@@ -54,6 +56,7 @@ public final class PlanExecutor: @unchecked Sendable {
         self.toolRegistry = toolRegistry
         self.undoJournal = undoJournal
         self.memoryReader = memoryReader
+        self.reportLedger = reportLedger
     }
     
     public func executePlan(
@@ -62,6 +65,7 @@ public final class PlanExecutor: @unchecked Sendable {
         context: ToolExecutionContext = ToolExecutionContext(),
         userPresent: Bool = true,
         strictStepCap: Bool = false,
+        archetype: SpecialistArchetype? = nil,
         onStepProgress: (@Sendable (Int, Int, String) -> Void)? = nil
     ) async throws -> PlanJob {
         if steps.count > maxSteps && strictStepCap {
@@ -86,6 +90,7 @@ public final class PlanExecutor: @unchecked Sendable {
         job.updatedAt = Date()
         try await jobStore.updateJob(job)
         
+        _ = try? reportLedger.startReport(jobId: job.id, archetype: archetype, goal: goal)
         return try await runLoop(job: job, context: context, userPresent: userPresent, onStepProgress: onStepProgress)
     }
     
@@ -168,11 +173,36 @@ public final class PlanExecutor: @unchecked Sendable {
         userPresent: Bool,
         onStepProgress: (@Sendable (Int, Int, String) -> Void)? = nil
     ) async throws -> PlanJob {
+        do {
+            let finalJob = try await runLoopCore(
+                job: job,
+                context: context,
+                userPresent: userPresent,
+                onStepProgress: onStepProgress
+            )
+            finalizeLedger(for: finalJob)
+            return finalJob
+        } catch {
+            var failedJob = job
+            failedJob.status = .failed
+            failedJob.errorMessage = error.localizedDescription
+            finalizeLedger(for: failedJob)
+            throw error
+        }
+    }
+    
+    private func runLoopCore(
+        job: PlanJob,
+        context: ToolExecutionContext,
+        userPresent: Bool,
+        onStepProgress: (@Sendable (Int, Int, String) -> Void)? = nil
+    ) async throws -> PlanJob {
         var job = job
         
         while job.currentStepIndex < job.steps.count {
             let i = job.currentStepIndex
             var step = job.steps[i]
+            let stepStart = Date()
             
             onStepProgress?(i, job.steps.count, step.description)
             
@@ -204,6 +234,7 @@ public final class PlanExecutor: @unchecked Sendable {
                 job.errorMessage = "Tool not found in registry: \(step.toolName)"
                 job.updatedAt = Date()
                 try await jobStore.updateJob(job)
+                appendStepLedger(job: job, index: i, step: step, startedAt: stepStart)
                 return job
             }
             
@@ -246,6 +277,7 @@ public final class PlanExecutor: @unchecked Sendable {
                 job.errorMessage = step.resultMessage
                 job.updatedAt = Date()
                 try await jobStore.updateJob(job)
+                appendStepLedger(job: job, index: i, step: step, startedAt: stepStart)
                 return job
             }
             
@@ -270,6 +302,7 @@ public final class PlanExecutor: @unchecked Sendable {
                 job.status = .pausedForApproval
                 job.updatedAt = Date()
                 try await jobStore.updateJob(job)
+                appendStepLedger(job: job, index: i, step: step, startedAt: stepStart)
                 return job
             }
             
@@ -283,6 +316,7 @@ public final class PlanExecutor: @unchecked Sendable {
                     job.currentStepIndex += 1
                     job.updatedAt = Date()
                     try await jobStore.updateJob(job)
+                    appendStepLedger(job: job, index: i, step: step, startedAt: stepStart)
                 } else {
                     step.status = .failed
                     step.resultMessage = result.message
@@ -291,6 +325,7 @@ public final class PlanExecutor: @unchecked Sendable {
                     job.errorMessage = result.message
                     job.updatedAt = Date()
                     try await jobStore.updateJob(job)
+                    appendStepLedger(job: job, index: i, step: step, startedAt: stepStart)
                     return job
                 }
             } catch {
@@ -301,6 +336,7 @@ public final class PlanExecutor: @unchecked Sendable {
                 job.errorMessage = error.localizedDescription
                 job.updatedAt = Date()
                 try await jobStore.updateJob(job)
+                appendStepLedger(job: job, index: i, step: step, startedAt: stepStart)
                 return job
             }
         }
@@ -310,6 +346,33 @@ public final class PlanExecutor: @unchecked Sendable {
         job.updatedAt = Date()
         try await jobStore.updateJob(job)
         return job
+    }
+    
+    private func appendStepLedger(job: PlanJob, index: Int, step: PlanStep, startedAt: Date) {
+        let elapsedMs = Date().timeIntervalSince(startedAt) * 1000.0
+        try? reportLedger.appendStep(
+            jobId: job.id,
+            stepIndex: index + 1,
+            totalSteps: job.steps.count,
+            toolName: step.toolName,
+            status: step.status.rawValue,
+            detail: step.resultMessage ?? step.description,
+            durationMs: elapsedMs
+        )
+    }
+    
+    private func finalizeLedger(for job: PlanJob) {
+        let completedCount = job.steps.filter { $0.status == .completed }.count
+        let summary = job.errorMessage ?? "Executed \(completedCount)/\(job.steps.count) steps"
+        let verification = job.status == .completed
+            ? "All \(job.steps.count) steps completed"
+            : "Ended with status \(job.status.rawValue)"
+        try? reportLedger.finalizeReport(
+            jobId: job.id,
+            status: job.status.rawValue,
+            summary: summary,
+            verification: verification
+        )
     }
     
     private func currentMemoryMB() -> Double {

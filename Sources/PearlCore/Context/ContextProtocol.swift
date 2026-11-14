@@ -43,8 +43,12 @@ public protocol MemoryContextProvider: Sendable {
     func explicitRemember(fact: String, trust: TrustLevel) async throws -> String
     func forget(factId: String) async throws -> Bool
     func proposePreferenceIfApplicable(utterance: String, trust: TrustLevel) async
+    func triggerDreamSynthesis() async throws -> String
 }
 
 public extension MemoryContextProvider {
     func proposePreferenceIfApplicable(utterance: String, trust: TrustLevel) async {}
+    func triggerDreamSynthesis() async throws -> String {
+        return "Dream synthesis requires PearlMemory to be initialized."
+    }
 }

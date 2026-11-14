@@ -1,4 +1,4 @@
-# Pearl (v3.1.0)
+# Pearl (v3.2.0)
 
 > Capable, private, lightweight native macOS personal AI assistant built in compiled Swift for Apple Silicon.
 
@@ -7,7 +7,7 @@
 [![License](https://img.shields.io/badge/license-MIT%20%2F%20Apache--2.0-green.svg)](LICENSE)
 [![Zero Telemetry](https://img.shields.io/badge/telemetry-0%20call%20home-brightgreen.svg)](PRIVACY.md)
 [![MCP Compliant](https://img.shields.io/badge/MCP-2024--11--05-purple.svg)](docs/MCP.md)
-[![Tests](https://img.shields.io/badge/tests-156%2F156%20passed%20(100%25)-brightgreen.svg)](Tests/)
+[![Tests](https://img.shields.io/badge/tests-209%2F209%20passed%20(100%25)-brightgreen.svg)](Tests/)
 
 ---
 
@@ -61,6 +61,13 @@ It presents an ultra-responsive floating pill HUD beneath the display notch, sup
    - **On-Demand Local MLX Brain**: Optional lazy-loaded `MLXProvider` (~1.5B 4-bit) with memory-pressure refusal and 30s idle auto-unload (`0 MB` idle footprint).
    - **Expanded Tiered Tools & Screen OCR**: Allowlisted `FileTools`, `WindowTool`, `ShortcutsTool`, `BrowserTool`, `CommunicationDraftTool` (Mail drafts without auto-send; `send_mail` strictly T4 confirmed), and in-memory `ScreenCaptureKit` + Vision OCR (`read_screen_text`).
    - **Declarative Markdown Skills & Smart Nudges**: Inspectable skills in `~/Library/Application Support/Pearl/skills/*.md` (`start-workday`, `meeting-prep`), proactive nudges with quiet hours, and user-approved preference learning.
+
+8. **V3.2.0 "Ultron Workflow Edition" (Self-Improving Skills, Sub-Bot Swarm, PearlVault & Personas)**:
+   - **O(1) Inverted Skill Index, Recipes & Unified-Diff Review Queue**: `SkillEngine` tokenized keyword trigger index + 16-blueprint catalog across 8 categories; `RecipeEngine` parameterized `{{variable}}` Markdown workflows; `ProposalStore` unified-diff queue (`pearl review [list|show|approve|reject]`) that never auto-applies changes without explicit approval.
+   - **Parallel Web Sub-Bot Swarm (`SubBotManager`)**: Native Swift `Search`, `Scrape`, `Crawl`, `Map`, and SHA-256 `Monitor` bots (`maxConcurrency = 4`, 45 MB RSS guard, `.untrusted` taint propagation, optional Firecrawl upgrade).
+   - **Obsidian `PearlVault` & `pearl dream` Synthesis**: `~/Documents/PearlVault` YAML frontmatter + `[[wikilinks]]` knowledge notes, `DreamEngine` cross-memory synthesis (`Dreams/YYYY-MM-DD.md`), and atomic `OutputFileTool` writes to `~/Documents/PearlOutput/`.
+   - **Switchable Personas, `@archetypes` & Crash-Proof Ledger**: Switchable `executive`, `ultron` ("Roast-Then-Results"), and `jarvis` personas; `@athena`, `@artemis`, `@mnemosyne`, and `@sisyphus` specialist routing; and crash-proof `SubagentReportLedger` (`~/Library/Application Support/Pearl/reports/<jobId>.md`).
+   - **Centralized TTL Cache & `p50/p95/p99` Telemetry**: Thread-safe `CacheManager` + `PerformanceMonitor` (`209 / 209` unit tests passing across all suites).
 
 ---
 
@@ -138,7 +145,7 @@ brew install --cask pearl
 
 ### Option B: Download Notarized App
 
-Download `Pearl-2.0.0.dmg` from the latest [GitHub Release](https://github.com/rossonerian/Pearl/releases). Drag `Pearl.app` into `/Applications`.
+Download `Pearl-3.2.0.dmg` from the latest [GitHub Release](https://github.com/rossonerian/Pearl/releases). Drag `Pearl.app` into `/Applications`.
 
 ### Option C: Build From Source
 
@@ -194,6 +201,16 @@ pearl forget <fact_id>
 
 # Run security and sandbox diagnostics
 pearl doctor --security
+
+# Ultron Workflow V3.2 commands
+pearl persona ultron
+pearl recipes list
+pearl review list
+pearl vault list
+pearl dream
+pearl subbots search "SwiftUI notch HUD"
+pearl cache stats
+pearl metrics
 
 # Run native Model Context Protocol (MCP) server
 pearl mcp

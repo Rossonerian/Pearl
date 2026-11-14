@@ -421,6 +421,168 @@ public final class CentralToolCatalog: @unchecked Sendable {
                 nativeAssistantExposed: true,
                 cliExposed: true,
                 mcpExposed: false
+            ),
+            
+            // V3.2 Ultron Workflow Edition Tools (Explicitly mcpExposed: false to preserve 8-tool T0-T2 MCP invariant)
+            ToolMetadata(
+                name: "propose_skill",
+                description: "Stage a new or modified Markdown skill or recipe into the ProposalStore review queue",
+                arguments: [
+                    ToolArgumentDescriptor(name: "name", description: "Target slug name", isRequired: true),
+                    ToolArgumentDescriptor(name: "target_kind", description: "skill or recipe", allowedValues: ["skill", "recipe"]),
+                    ToolArgumentDescriptor(name: "change_type", description: "create, edit, or delete", allowedValues: ["create", "edit", "delete"]),
+                    ToolArgumentDescriptor(name: "title", description: "Proposal title"),
+                    ToolArgumentDescriptor(name: "trigger", description: "Trigger phrase"),
+                    ToolArgumentDescriptor(name: "description", description: "Description"),
+                    ToolArgumentDescriptor(name: "content", description: "Markdown content or numbered steps"),
+                    ToolArgumentDescriptor(name: "explanation", description: "Rationale")
+                ],
+                tier: .t1Reversible,
+                requiredTCC: [],
+                isReversible: true,
+                requiresConfirmation: false,
+                nativeAssistantExposed: true,
+                cliExposed: true,
+                mcpExposed: false
+            ),
+            ToolMetadata(
+                name: "use_recipe",
+                description: "Render a parameterized Markdown recipe or compile one into a skill proposal",
+                arguments: [
+                    ToolArgumentDescriptor(name: "name", description: "Recipe name or 'list'", isRequired: true),
+                    ToolArgumentDescriptor(name: "arguments", description: "JSON object or key=value pairs"),
+                    ToolArgumentDescriptor(name: "compile_to_skill", description: "Set true to stage as a skill proposal")
+                ],
+                tier: .t0Observe,
+                requiredTCC: [],
+                isReversible: false,
+                requiresConfirmation: false,
+                nativeAssistantExposed: true,
+                cliExposed: true,
+                mcpExposed: false
+            ),
+            ToolMetadata(
+                name: "search_skill_catalog",
+                description: "Search Pearl's built-in 16-blueprint skill catalog and local installed skills",
+                arguments: [
+                    ToolArgumentDescriptor(name: "query", description: "Keyword filter"),
+                    ToolArgumentDescriptor(name: "category", description: "Category filter"),
+                    ToolArgumentDescriptor(name: "include_local", description: "Include local skills (default true)")
+                ],
+                tier: .t0Observe,
+                requiredTCC: [],
+                isReversible: false,
+                requiresConfirmation: false,
+                nativeAssistantExposed: true,
+                cliExposed: true,
+                mcpExposed: false
+            ),
+            ToolMetadata(
+                name: "subbot_run",
+                description: "Execute a web research sub-bot (search, scrape, crawl, map, monitor)",
+                arguments: [
+                    ToolArgumentDescriptor(name: "bot_type", description: "Bot type", isRequired: true, allowedValues: ["search", "scrape", "crawl", "map", "monitor"]),
+                    ToolArgumentDescriptor(name: "targets", description: "Target URL(s)"),
+                    ToolArgumentDescriptor(name: "query", description: "Search query"),
+                    ToolArgumentDescriptor(name: "max_depth", description: "Maximum crawl depth"),
+                    ToolArgumentDescriptor(name: "limit", description: "Maximum pages/results")
+                ],
+                tier: .t2ReadPersonal,
+                requiredTCC: [],
+                isReversible: false,
+                requiresConfirmation: false,
+                nativeAssistantExposed: true,
+                cliExposed: true,
+                mcpExposed: false
+            ),
+            ToolMetadata(
+                name: "subbot_workflow",
+                description: "Execute a composite SubBot research workflow (search_and_scrape, market_research, competitive_analysis)",
+                arguments: [
+                    ToolArgumentDescriptor(name: "workflow", description: "Workflow name", isRequired: true, allowedValues: ["search_and_scrape", "market_research", "competitive_analysis"]),
+                    ToolArgumentDescriptor(name: "query", description: "Search query"),
+                    ToolArgumentDescriptor(name: "urls", description: "Comma-separated URLs"),
+                    ToolArgumentDescriptor(name: "top_n", description: "Top results to scrape")
+                ],
+                tier: .t2ReadPersonal,
+                requiredTCC: [],
+                isReversible: false,
+                requiresConfirmation: false,
+                nativeAssistantExposed: true,
+                cliExposed: true,
+                mcpExposed: false
+            ),
+            ToolMetadata(
+                name: "vault_list",
+                description: "List Markdown notes in the Obsidian-compatible Pearl vault",
+                arguments: [],
+                tier: .t0Observe,
+                requiredTCC: [],
+                isReversible: false,
+                requiresConfirmation: false,
+                nativeAssistantExposed: true,
+                cliExposed: true,
+                mcpExposed: false
+            ),
+            ToolMetadata(
+                name: "vault_read",
+                description: "Read a Markdown note from the Pearl vault",
+                arguments: [
+                    ToolArgumentDescriptor(name: "name", description: "Note name or path", isRequired: true)
+                ],
+                tier: .t2ReadPersonal,
+                requiredTCC: [],
+                isReversible: false,
+                requiresConfirmation: false,
+                nativeAssistantExposed: true,
+                cliExposed: true,
+                mcpExposed: false
+            ),
+            ToolMetadata(
+                name: "vault_write",
+                description: "Write or update a Markdown note in the Pearl vault with frontmatter and wikilinks",
+                arguments: [
+                    ToolArgumentDescriptor(name: "name", description: "Note name or path", isRequired: true),
+                    ToolArgumentDescriptor(name: "content", description: "Note body Markdown", isRequired: true),
+                    ToolArgumentDescriptor(name: "tags", description: "Comma-separated tags"),
+                    ToolArgumentDescriptor(name: "wikilinks", description: "Comma-separated wikilinks")
+                ],
+                tier: .t1Reversible,
+                requiredTCC: [],
+                isReversible: true,
+                requiresConfirmation: false,
+                nativeAssistantExposed: true,
+                cliExposed: true,
+                mcpExposed: false
+            ),
+            ToolMetadata(
+                name: "vault_search",
+                description: "Search notes in the Obsidian-compatible Pearl vault",
+                arguments: [
+                    ToolArgumentDescriptor(name: "query", description: "Search query", isRequired: true)
+                ],
+                tier: .t2ReadPersonal,
+                requiredTCC: [],
+                isReversible: false,
+                requiresConfirmation: false,
+                nativeAssistantExposed: true,
+                cliExposed: true,
+                mcpExposed: false
+            ),
+            ToolMetadata(
+                name: "write_output_file",
+                description: "Atomically write an output artifact (.md, .txt, .csv, .json, .html) to ~/Documents/PearlOutput/",
+                arguments: [
+                    ToolArgumentDescriptor(name: "filename", description: "Target filename", isRequired: true),
+                    ToolArgumentDescriptor(name: "content", description: "File contents", isRequired: true)
+                ],
+                tier: .t3WorkspaceChanges,
+                requiredTCC: [],
+                isReversible: true,
+                requiresConfirmation: true,
+                nativeAssistantExposed: true,
+                cliExposed: true,
+                mcpExposed: false
             )
         ]
         
