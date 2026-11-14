@@ -1,6 +1,8 @@
 import AppKit
 import SwiftUI
 import Foundation
+import Speech
+import AVFoundation
 import PearlCore
 import PearlTools
 import PearlVoice
@@ -51,12 +53,39 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         registerNativeTools()
         
         // 5. Setup Live Voice Pipeline & 60 Hz Metering
-        AudioCaptureEngine.shared.onLevelMeterUpdated = { [weak self] level in
+        let speech = LiveSpeechRecognizer.shared
+        speech.onAudioLevelUpdated = { [weak self] level in
             self?.hudPanel.hudView.updateAudioLevel(CGFloat(level))
+        }
+        speech.onPartialTranscript = { [weak self] text in
+            self?.hudPanel.hudView.setStatusText(text)
+        }
+        speech.onFinalTranscript = { [weak self] transcript in
+            self?.handleVoiceUtterance(transcript)
+        }
+        speech.onError = { error in
+            NSLog("[Pearl] Live speech recognizer notice: %@", error.localizedDescription)
+        }
+        
+        SpeechSynthesizerService.shared.onPlaybackFinished = { [weak self] in
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+                guard let self = self else { return }
+                if !LiveSpeechRecognizer.shared.active && !SpeechSynthesizerService.shared.speaking {
+                    self.hudPanel.hidePill()
+                }
+            }
         }
         
         BargeInController.shared.onBargeInTriggered = { [weak self] in
             self?.hudPanel.showPill(text: "Listening...", thinking: false)
+        }
+        
+        // Request speech & audio permissions asynchronously if needed
+        SFSpeechRecognizer.requestAuthorization { status in
+            NSLog("[Pearl] Speech recognition authorization status: %ld", status.rawValue)
+        }
+        AVCaptureDevice.requestAccess(for: .audio) { granted in
+            NSLog("[Pearl] Audio capture granted: %d", granted)
         }
         
         // 6. Setup Unix Domain Socket Server for CLI
@@ -110,9 +139,53 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     
     private func toggleHUD() {
         if hudPanel.isPillVisible {
+            LiveSpeechRecognizer.shared.stopListening()
+            SpeechSynthesizerService.shared.stopPlayback()
             hudPanel.hidePill()
         } else {
-            hudPanel.showPill(text: "Pearl standing by", thinking: false)
+            hudPanel.showPill(text: "Listening...", thinking: false)
+            hudPanel.hudView.updateAudioLevel(0.05)
+            do {
+                try LiveSpeechRecognizer.shared.startListening()
+            } catch {
+                NSLog("[Pearl] Failed to start live speech: %@", error.localizedDescription)
+                hudPanel.showPill(text: "Microphone unavailable", thinking: false)
+            }
+        }
+    }
+    
+    private func handleVoiceUtterance(_ utterance: String) {
+        guard !utterance.isEmpty else { return }
+        
+        hudPanel.showPill(text: "Thinking...", thinking: true)
+        
+        Task {
+            var responseText = ""
+            
+            // 1. Check deterministic router for instant action
+            if let intent = DeterministicRouter.shared.resolve(utterance: utterance) {
+                if let tool = ToolRegistry.shared.tool(named: intent.toolName) {
+                    let ctx = ToolExecutionContext(trustState: .trusted, userConfirmed: false)
+                    if let toolRes = try? await PolicyEngine.shared.execute(tool: tool, args: intent.arguments, context: ctx) {
+                        responseText = toolRes.message
+                    } else {
+                        responseText = "Execution failed."
+                    }
+                } else {
+                    responseText = "Action '\(intent.toolName)' is not available."
+                }
+            } else {
+                // 2. Fallback to Apple FM / Frontier Chain
+                let fallbackChain = FallbackChain()
+                let modelRes = await fallbackChain.process(utterance: utterance)
+                responseText = modelRes.content
+            }
+            
+            let finalReply = responseText
+            await MainActor.run {
+                self.hudPanel.showPill(text: finalReply, thinking: false)
+                SpeechSynthesizerService.shared.speak(text: finalReply)
+            }
         }
     }
     
@@ -225,8 +298,20 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
                     isSuccess = false
                 }
             } else {
-                responseMessage = "Unmatched query (ready for local LLM tier): \(query)"
-                isSuccess = true
+                let sema = DispatchSemaphore(value: 0)
+                let hud = self.hudPanel
+                Task {
+                    let chain = FallbackChain()
+                    let modelRes = await chain.process(utterance: query)
+                    responseMessage = modelRes.content
+                    isSuccess = true
+                    DispatchQueue.main.async {
+                        hud?.showPill(text: modelRes.content, thinking: false)
+                        SpeechSynthesizerService.shared.speak(text: modelRes.content)
+                    }
+                    sema.signal()
+                }
+                sema.wait()
             }
             
         case "quit":

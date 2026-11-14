@@ -154,6 +154,8 @@ cat > "${DIST_DIR}/${APP_NAME}.app/Contents/Info.plist" <<EOF
     <string>Copyright © 2026 Pearl AI. Zero telemetry, Apache 2.0 / MIT.</string>
     <key>NSMicrophoneUsageDescription</key>
     <string>Pearl requires microphone access for low-latency push-to-talk voice interaction.</string>
+    <key>NSSpeechRecognitionUsageDescription</key>
+    <string>Pearl requires Speech Recognition to understand voice commands on device.</string>
     <key>NSAppleEventsUsageDescription</key>
     <string>Pearl requires Apple Events authorization to automate desktop applications safely.</string>
     <key>SUFeedURL</key>
