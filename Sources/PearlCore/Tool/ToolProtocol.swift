@@ -74,6 +74,13 @@ public protocol PearlTool: Sendable {
     var tier: ToolTier { get }
     var requiredTCC: [TCCService] { get }
     var isReversible: Bool { get }
+    var argumentDescriptors: [ToolArgumentDescriptor] { get }
     
     func execute(args: [String: String], context: ToolExecutionContext) async throws -> ToolResult
+}
+
+extension PearlTool {
+    public var argumentDescriptors: [ToolArgumentDescriptor] {
+        return []
+    }
 }

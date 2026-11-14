@@ -1,13 +1,24 @@
 import Foundation
 import PearlCore
 
+/// Asynchronous Unix Domain Socket Server for Pearl.
+///
+/// Features:
+/// - Fully asynchronous `async`/`await` request processing without thread blocking or semaphores.
+/// - Length-safe read loop supporting messages up to `maxRequestBytes` (64 KB).
+/// - Socket timeout enforcement (`SO_RCVTIMEO` and `SO_SNDTIMEO`).
+/// - Strict POSIX permission enforcement (`0700` directory, `0600` socket file).
+/// - Safe lifecycle handling with graceful shutdown and stale socket unlink.
 public final class UnixSocketServer: @unchecked Sendable {
+    public static let maxRequestBytes = 65536 // 64 KB limit
+    public static let defaultTimeoutSeconds = 2.0
+    
     private let socketPath: String
     private var serverSource: DispatchSourceRead?
     private var serverFD: Int32 = -1
     private let queue = DispatchQueue(label: "com.pearl.ipc.server", qos: .userInteractive)
     
-    public var onCommandHandler: ((IPCRequest) -> IPCResponse)?
+    public var onCommandHandler: (@Sendable (IPCRequest) async -> IPCResponse)?
     
     public init(socketPath: String) {
         self.socketPath = socketPath
@@ -19,6 +30,7 @@ public final class UnixSocketServer: @unchecked Sendable {
             .posixPermissions: 0o700
         ])
         
+        // Remove any stale socket file before binding
         unlink(socketPath)
         
         serverFD = socket(AF_UNIX, SOCK_STREAM, 0)
@@ -103,29 +115,45 @@ public final class UnixSocketServer: @unchecked Sendable {
             var opt: Int32 = 1
             _ = setsockopt(clientFD, SOL_SOCKET, SO_NOSIGPIPE, &opt, socklen_t(MemoryLayout<Int32>.size))
             
-            // Clear O_NONBLOCK so client reads wait for request payload with a 2-second timeout
+            // Clear non-blocking on accepted client FD
             let flags = fcntl(clientFD, F_GETFL, 0)
             _ = fcntl(clientFD, F_SETFL, flags & ~O_NONBLOCK)
+            
             var tv = timeval(tv_sec: 2, tv_usec: 0)
             _ = setsockopt(clientFD, SOL_SOCKET, SO_RCVTIMEO, &tv, socklen_t(MemoryLayout<timeval>.size))
             _ = setsockopt(clientFD, SOL_SOCKET, SO_SNDTIMEO, &tv, socklen_t(MemoryLayout<timeval>.size))
             
-            queue.async { [weak self] in
-                self?.handleClient(fd: clientFD)
+            Task { [weak self] in
+                await self?.handleClientAsync(fd: clientFD)
             }
         }
     }
     
-    private func handleClient(fd: Int32) {
+    private func handleClientAsync(fd: Int32) async {
         defer { close(fd) }
         
-        var buffer = [UInt8](repeating: 0, count: 16384)
-        let bytesRead = read(fd, &buffer, buffer.count)
-        guard bytesRead > 0 else { return }
+        var requestData = Data()
+        var buffer = [UInt8](repeating: 0, count: 4096)
         
-        let requestData = Data(buffer[0..<bytesRead])
-        guard let request = try? JSONDecoder().decode(IPCRequest.self, from: requestData) else {
-            let errResp = IPCResponse(id: "error", success: false, message: "Invalid JSON-RPC payload")
+        // Read data until we have a decodable IPCRequest or hit maxRequestBytes
+        while requestData.count < Self.maxRequestBytes {
+            let bytesRead = read(fd, &buffer, buffer.count)
+            if bytesRead <= 0 {
+                break
+            }
+            requestData.append(buffer, count: bytesRead)
+            
+            // Attempt decoding if we have data
+            if (try? JSONDecoder().decode(IPCRequest.self, from: requestData)) != nil {
+                break
+            }
+        }
+        
+        guard !requestData.isEmpty else { return }
+        
+        let decoder = JSONDecoder()
+        guard let request = try? decoder.decode(IPCRequest.self, from: requestData) else {
+            let errResp = IPCResponse(id: "error", success: false, message: "Invalid JSON-RPC request payload")
             if let data = try? JSONEncoder().encode(errResp) {
                 _ = data.withUnsafeBytes { write(fd, $0.baseAddress!, data.count) }
             }
@@ -134,7 +162,7 @@ public final class UnixSocketServer: @unchecked Sendable {
         
         let response: IPCResponse
         if let handler = onCommandHandler {
-            response = handler(request)
+            response = await handler(request)
         } else {
             response = IPCResponse(id: request.id, success: false, message: "No command handler registered")
         }

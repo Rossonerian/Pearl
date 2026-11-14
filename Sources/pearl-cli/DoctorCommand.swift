@@ -326,8 +326,8 @@ public enum DoctorCommand {
         let name = "MCP Tool Surface Integrity (T0-T2)"
         
         let expectedTools = [
-            "battery", "close_app", "frontmost_app", "git_status",
-            "open_app", "reminder", "screenshot", "volume"
+            "battery", "frontmost_app", "git_status",
+            "open_app", "reminder", "screenshot", "undo", "volume"
         ]
         
         MCPServer.registerDefaultTools()
