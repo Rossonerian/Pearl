@@ -65,6 +65,10 @@ public struct PearlToolsRegistry {
             OpenURLTool(),
             ReadActiveTabTool(),
             
+            // SubBots & Autonomous Web Operations
+            SubBotRunTool(),
+            SubBotWorkflowTool(),
+            
             // Communication & Mail Drafts
             CreateMailDraftTool(),
             SendMailTool(),
