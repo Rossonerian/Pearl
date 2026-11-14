@@ -4,6 +4,7 @@ import PearlMCP
 import PearlMemory
 
 signal(SIGPIPE, SIG_IGN)
+AssistantPipeline.shared.memoryProvider = PearlMemoryProvider.shared
 
 func sendIPC(command: String, args: [String: String]? = nil) -> (response: IPCResponse?, roundTripMs: Double) {
     let config = PearlConfig.load()

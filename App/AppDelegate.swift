@@ -49,8 +49,9 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         CarbonHotkeyManager.shared.registerDefaultHotkey()
         
-        // 4. Register Native Typed Tools
+        // 4. Register Native Typed Tools & Memory Provider
         registerNativeTools()
+        AssistantPipeline.shared.memoryProvider = PearlMemoryProvider.shared
         
         // 5. Setup Live Voice Pipeline & 60 Hz Metering
         let speech = LiveSpeechRecognizer.shared
