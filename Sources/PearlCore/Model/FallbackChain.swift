@@ -12,17 +12,23 @@ public struct ChainStepFailure: Sendable {
 
 public final class FallbackChain: Sendable {
     public let appleFM: AppleFMProvider
+    public let mlxProvider: MLXProvider
     public let frontier: FrontierProvider
     public let pccEnabled: Bool
+    public let mlxEnabled: Bool
     
     public init(
         appleFM: AppleFMProvider = AppleFMProvider(),
+        mlxProvider: MLXProvider = MLXProvider(),
         frontier: FrontierProvider = FrontierProvider(),
-        pccEnabled: Bool = PearlConfig.load().pccEnabled
+        pccEnabled: Bool = PearlConfig.load().pccEnabled,
+        mlxEnabled: Bool = PearlConfig.load().mlxEnabled
     ) {
         self.appleFM = appleFM
+        self.mlxProvider = mlxProvider
         self.frontier = frontier
         self.pccEnabled = pccEnabled
+        self.mlxEnabled = mlxEnabled
     }
     
     public func process(
@@ -46,6 +52,24 @@ public final class FallbackChain: Sendable {
             failureLog.append(ChainStepFailure(
                 step: "On-device Apple FM",
                 reason: "Bypassed: user or task requested frontier escalation."
+            ))
+        }
+        
+        // 1.5. Step 1.5: On-device Small MLX
+        if mlxEnabled && !context.forceEscalation {
+            do {
+                let response = try await mlxProvider.generate(prompt: utterance, context: context)
+                return response
+            } catch {
+                failureLog.append(ChainStepFailure(
+                    step: "On-device Small MLX",
+                    reason: error.localizedDescription
+                ))
+            }
+        } else {
+            failureLog.append(ChainStepFailure(
+                step: "On-device Small MLX",
+                reason: mlxEnabled ? "Bypassed: user or task requested frontier escalation." : "On-device Small MLX: Disabled in settings"
             ))
         }
         

@@ -16,9 +16,20 @@ public struct PearlConfig: Codable, Sendable {
     public var monthlySpendCapUSD: Double
     public var maxTokensPerTurn: Int
     public var pccEnabled: Bool
+    public var mlxEnabled: Bool
+    public var mlxModelID: String
+    public var mlxIdleUnloadSeconds: Int
+    public var allowedFolders: [String]
+    public var quietHoursStart: Int
+    public var quietHoursEnd: Int
+    public var autoLeaveSeconds: Double
+    
+    enum CodingKeys: String, CodingKey {
+        case version, hotkey, socketPath, fastModelID, escalationModelID, modelProviderEndpoint, voiceLocale, preferredVoice, bargeInEnabled, pushToTalkDefault, maxContextTokens, memoryDirectory, monthlySpendCapUSD, maxTokensPerTurn, pccEnabled, mlxEnabled, mlxModelID, mlxIdleUnloadSeconds, allowedFolders, quietHoursStart, quietHoursEnd, autoLeaveSeconds
+    }
     
     public init(
-        version: String = "2.0.0",
+        version: String = "3.1.0",
         hotkey: String = "ctrl+opt+space",
         socketPath: String = ("~/Library/Application Support/Pearl/pearl.sock" as NSString).expandingTildeInPath,
         fastModelID: String = "claude-haiku-5-5",
@@ -32,7 +43,14 @@ public struct PearlConfig: Codable, Sendable {
         memoryDirectory: String = ("~/.pearl/memory" as NSString).expandingTildeInPath,
         monthlySpendCapUSD: Double = 10.0,
         maxTokensPerTurn: Int = 4096,
-        pccEnabled: Bool = false
+        pccEnabled: Bool = false,
+        mlxEnabled: Bool = false,
+        mlxModelID: String = "mlx-community/Qwen2.5-1.5B-Instruct-4bit",
+        mlxIdleUnloadSeconds: Int = 30,
+        allowedFolders: [String] = ["~/Documents", "~/Downloads", "~/Desktop", "~/Projects"],
+        quietHoursStart: Int = 22,
+        quietHoursEnd: Int = 8,
+        autoLeaveSeconds: Double = 4.0
     ) {
         self.version = version
         self.hotkey = hotkey
@@ -49,6 +67,39 @@ public struct PearlConfig: Codable, Sendable {
         self.monthlySpendCapUSD = monthlySpendCapUSD
         self.maxTokensPerTurn = maxTokensPerTurn
         self.pccEnabled = pccEnabled
+        self.mlxEnabled = mlxEnabled
+        self.mlxModelID = mlxModelID
+        self.mlxIdleUnloadSeconds = mlxIdleUnloadSeconds
+        self.allowedFolders = allowedFolders
+        self.quietHoursStart = quietHoursStart
+        self.quietHoursEnd = quietHoursEnd
+        self.autoLeaveSeconds = autoLeaveSeconds
+    }
+    
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.version = try container.decodeIfPresent(String.self, forKey: .version) ?? "3.1.0"
+        self.hotkey = try container.decodeIfPresent(String.self, forKey: .hotkey) ?? "ctrl+opt+space"
+        self.socketPath = try container.decodeIfPresent(String.self, forKey: .socketPath) ?? ("~/Library/Application Support/Pearl/pearl.sock" as NSString).expandingTildeInPath
+        self.fastModelID = try container.decodeIfPresent(String.self, forKey: .fastModelID) ?? "claude-haiku-5-5"
+        self.escalationModelID = try container.decodeIfPresent(String.self, forKey: .escalationModelID) ?? "claude-sonnet-5-5"
+        self.modelProviderEndpoint = try container.decodeIfPresent(String.self, forKey: .modelProviderEndpoint) ?? "https://api.anthropic.com/v1/messages"
+        self.voiceLocale = try container.decodeIfPresent(String.self, forKey: .voiceLocale) ?? "en-GB"
+        self.preferredVoice = try container.decodeIfPresent(String.self, forKey: .preferredVoice) ?? "Daniel"
+        self.bargeInEnabled = try container.decodeIfPresent(Bool.self, forKey: .bargeInEnabled) ?? true
+        self.pushToTalkDefault = try container.decodeIfPresent(Bool.self, forKey: .pushToTalkDefault) ?? true
+        self.maxContextTokens = try container.decodeIfPresent(Int.self, forKey: .maxContextTokens) ?? 4096
+        self.memoryDirectory = try container.decodeIfPresent(String.self, forKey: .memoryDirectory) ?? ("~/.pearl/memory" as NSString).expandingTildeInPath
+        self.monthlySpendCapUSD = try container.decodeIfPresent(Double.self, forKey: .monthlySpendCapUSD) ?? 10.0
+        self.maxTokensPerTurn = try container.decodeIfPresent(Int.self, forKey: .maxTokensPerTurn) ?? 4096
+        self.pccEnabled = try container.decodeIfPresent(Bool.self, forKey: .pccEnabled) ?? false
+        self.mlxEnabled = try container.decodeIfPresent(Bool.self, forKey: .mlxEnabled) ?? false
+        self.mlxModelID = try container.decodeIfPresent(String.self, forKey: .mlxModelID) ?? "mlx-community/Qwen2.5-1.5B-Instruct-4bit"
+        self.mlxIdleUnloadSeconds = try container.decodeIfPresent(Int.self, forKey: .mlxIdleUnloadSeconds) ?? 30
+        self.allowedFolders = try container.decodeIfPresent([String].self, forKey: .allowedFolders) ?? ["~/Documents", "~/Downloads", "~/Desktop", "~/Projects"]
+        self.quietHoursStart = try container.decodeIfPresent(Int.self, forKey: .quietHoursStart) ?? 22
+        self.quietHoursEnd = try container.decodeIfPresent(Int.self, forKey: .quietHoursEnd) ?? 8
+        self.autoLeaveSeconds = try container.decodeIfPresent(Double.self, forKey: .autoLeaveSeconds) ?? 4.0
     }
     
     public static var defaultConfigurationDirectory: URL {
