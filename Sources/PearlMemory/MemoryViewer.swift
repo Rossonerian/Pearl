@@ -14,6 +14,7 @@ public actor MemoryViewer {
         let profile = await store.getProfile()
         let persona = await store.getPersona()
         let facts = await store.getAllFacts()
+        let items = await store.getAllItems()
         let pending = await gate.getPendingProposals()
         let version = await store.ftsIndex.getSchemaVersion()
         
@@ -23,6 +24,7 @@ public actor MemoryViewer {
             profile: profile,
             persona: persona,
             facts: facts,
+            items: items,
             pendingProposals: pending
         )
     }
@@ -40,7 +42,7 @@ public actor MemoryViewer {
     
     @discardableResult
     public func forget(factId: String) async throws -> Bool {
-        return try await store.removeFact(id: factId)
+        return try await store.removeItem(id: factId)
     }
     
     public func clearAllFacts() async throws {
@@ -52,6 +54,7 @@ public actor MemoryViewer {
         let profile = await store.getProfile()
         let pending = await gate.getPendingProposals()
         let version = await store.ftsIndex.getSchemaVersion()
+        let catCounts = await store.ftsIndex.getCategoryCounts()
         
         let profileBytes = profile.utf8.count
         let profileTokens = estimateTokenCount(profile)
@@ -61,7 +64,8 @@ public actor MemoryViewer {
             factCount: facts.count,
             profileByteCount: profileBytes,
             profileEstimatedTokens: profileTokens,
-            pendingProposalsCount: pending.count
+            pendingProposalsCount: pending.count,
+            categoryCounts: catCounts
         )
     }
 }
