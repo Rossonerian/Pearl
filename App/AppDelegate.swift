@@ -17,6 +17,12 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     private var onboardingWindow: NSWindow?
     private let launchDate = Date()
     
+    private struct PendingAutoLeave {
+        let seconds: TimeInterval
+        let dismissOnAppSwitch: Bool
+    }
+    private var pendingAutoLeave: PendingAutoLeave?
+    
     public func applicationDidFinishLaunching(_ notification: Notification) {
         NSApplication.shared.setActivationPolicy(.accessory)
         
@@ -69,10 +75,15 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         
         SpeechSynthesizerService.shared.onPlaybackFinished = { [weak self] in
-            DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+            DispatchQueue.main.async {
                 guard let self = self else { return }
-                if !LiveSpeechRecognizer.shared.active && !SpeechSynthesizerService.shared.speaking {
-                    self.hudPanel.hidePill()
+                if let pending = self.pendingAutoLeave {
+                    self.pendingAutoLeave = nil
+                    if pending.seconds > 0 {
+                        self.hudPanel.scheduleAutoLeave(after: pending.seconds, dismissOnAppSwitch: pending.dismissOnAppSwitch)
+                    }
+                } else {
+                    self.hudPanel.scheduleAutoLeave(after: 4.0, dismissOnAppSwitch: true)
                 }
             }
         }
@@ -175,7 +186,14 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
                 let isConfirmation = response.responseText.localizedCaseInsensitiveContains("confirmation required") ||
                                      response.responseText.localizedCaseInsensitiveContains("user confirmation required")
                 
-                if isConfirmation {
+                let decision = response.outputDecision ?? OutputDirector.shared.decide(
+                    responseText: response.responseText,
+                    speechText: response.speechText,
+                    origin: .voice,
+                    requiresConfirmation: isConfirmation
+                )
+                
+                if isConfirmation || decision.autoLeaveSeconds == 0 {
                     let toolName = response.badge.modelID.isEmpty ? "Action" : response.badge.modelID
                     self.hudPanel.showConfirmation(
                         toolName: toolName,
@@ -190,35 +208,77 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
                                 )
                                 let confirmedResp = await AssistantPipeline.shared.process(request: confirmedReq)
                                 await MainActor.run {
-                                    self?.hudPanel.recordTurn(
+                                    guard let self = self else { return }
+                                    self.hudPanel.recordTurn(
                                         userUtterance: "Confirmed: \(utterance)",
                                         assistantResponse: confirmedResp.responseText,
                                         badgeLabel: confirmedResp.badge.label,
                                         isLocal: confirmedResp.badge.isLocal,
                                         latencyMs: confirmedResp.latencyMs
                                     )
-                                    self?.hudPanel.showPill(
-                                        text: confirmedResp.responseText,
+                                    let confirmedDecision = confirmedResp.outputDecision ?? OutputDirector.shared.decide(
+                                        responseText: confirmedResp.responseText,
+                                        speechText: confirmedResp.speechText,
+                                        origin: .voice
+                                    )
+                                    self.hudPanel.showPill(
+                                        text: confirmedDecision.hudText,
                                         thinking: false,
                                         tierBadge: confirmedResp.badge.label,
                                         isLocal: confirmedResp.badge.isLocal
                                     )
-                                    SpeechSynthesizerService.shared.speak(text: confirmedResp.speechText)
+                                    if (confirmedDecision.mode == .speakFull || confirmedDecision.mode == .speakSummaryAndHUD),
+                                       let spoken = confirmedDecision.spokenText, !spoken.isEmpty {
+                                        self.pendingAutoLeave = PendingAutoLeave(
+                                            seconds: confirmedDecision.autoLeaveSeconds,
+                                            dismissOnAppSwitch: confirmedDecision.dismissOnAppSwitch
+                                        )
+                                        SpeechSynthesizerService.shared.speak(text: spoken)
+                                    } else {
+                                        self.hudPanel.scheduleAutoLeave(
+                                            after: confirmedDecision.autoLeaveSeconds,
+                                            dismissOnAppSwitch: confirmedDecision.dismissOnAppSwitch
+                                        )
+                                    }
                                 }
                             }
                         },
                         onCancel: { [weak self] in
-                            self?.hudPanel.showPill(text: "Action cancelled", thinking: false)
+                            guard let self = self else { return }
+                            self.hudPanel.showPill(text: "Action cancelled", thinking: false)
+                            self.hudPanel.scheduleAutoLeave(after: 2.0, dismissOnAppSwitch: true)
                         }
                     )
+                    
+                    if (decision.mode == .speakFull || decision.mode == .speakSummaryAndHUD),
+                       let spoken = decision.spokenText, !spoken.isEmpty {
+                        self.pendingAutoLeave = PendingAutoLeave(
+                            seconds: decision.autoLeaveSeconds,
+                            dismissOnAppSwitch: decision.dismissOnAppSwitch
+                        )
+                        SpeechSynthesizerService.shared.speak(text: spoken)
+                    }
                 } else {
                     self.hudPanel.showPill(
-                        text: response.responseText,
+                        text: decision.hudText,
                         thinking: false,
                         tierBadge: response.badge.label,
                         isLocal: response.badge.isLocal
                     )
-                    SpeechSynthesizerService.shared.speak(text: response.speechText)
+                    
+                    if (decision.mode == .speakFull || decision.mode == .speakSummaryAndHUD),
+                       let spoken = decision.spokenText, !spoken.isEmpty {
+                        self.pendingAutoLeave = PendingAutoLeave(
+                            seconds: decision.autoLeaveSeconds,
+                            dismissOnAppSwitch: decision.dismissOnAppSwitch
+                        )
+                        SpeechSynthesizerService.shared.speak(text: spoken)
+                    } else {
+                        self.hudPanel.scheduleAutoLeave(
+                            after: decision.autoLeaveSeconds,
+                            dismissOnAppSwitch: decision.dismissOnAppSwitch
+                        )
+                    }
                 }
             }
         }
