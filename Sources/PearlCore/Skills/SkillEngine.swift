@@ -54,6 +54,7 @@ public actor SkillEngine {
     public static let shared = SkillEngine()
     
     public let skillsDirectory: URL
+    private var didEnsureSeeded = false
     
     public init(skillsDirectory: URL? = nil) {
         if let dir = skillsDirectory {
@@ -64,6 +65,12 @@ public actor SkillEngine {
                 .appendingPathComponent("Pearl", isDirectory: true)
                 .appendingPathComponent("skills", isDirectory: true)
         }
+    }
+    
+    public func ensureSeeded() {
+        guard !didEnsureSeeded else { return }
+        didEnsureSeeded = true
+        try? seedDefaultSkillsIfEmpty()
     }
     
     /// Seeds default human-readable markdown skills if the skills directory has zero `.md` files.

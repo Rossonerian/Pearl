@@ -181,6 +181,14 @@ public final class DeterministicRouter: Sendable {
             return ResolvedIntent(toolName: "list_browser_tabs", arguments: [:], confidence: 1.0)
         }
         
+        // 14. Calendar & Clipboard (for Skills & Direct Commands)
+        if lower == "list calendar events" || lower == "show calendar events" || lower == "my calendar events" || lower == "check calendar" {
+            return ResolvedIntent(toolName: "list_calendar_events", arguments: ["time_window": "today"], confidence: 1.0)
+        }
+        if lower == "read clipboard" || lower == "check clipboard" || lower == "what is in my clipboard" || lower == "what's in my clipboard" {
+            return ResolvedIntent(toolName: "read_clipboard", arguments: [:], confidence: 1.0)
+        }
+        
         return nil
     }
     

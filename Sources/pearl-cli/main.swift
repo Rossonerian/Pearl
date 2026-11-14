@@ -385,11 +385,32 @@ case "nudges", "nudge":
     sema.wait()
 case "jobs", "job":
     let sub = args.count > 1 ? args[1].lowercased() : "list"
-    let result = sendIPC(command: "jobs", args: ["subcommand": sub])
+    var ipcArgs: [String: String] = ["subcommand": sub]
+    if (sub == "resume" || sub == "rollback") && args.count > 2 {
+        ipcArgs["id"] = args[2]
+    }
+    let result = sendIPC(command: "jobs", args: ipcArgs)
     if let resp = result.response {
         print(resp.message)
     } else {
-        print("Pearl daemon is not running (cannot inspect background jobs).")
+        let sema = DispatchSemaphore(value: 0)
+        Task {
+            do {
+                let jobs = try await JobStore.shared.listJobs()
+                if jobs.isEmpty {
+                    print("No plan jobs recorded.")
+                } else {
+                    print("Plan Jobs (\(jobs.count)):")
+                    for j in jobs.prefix(15) {
+                        print("  • [\(j.status.rawValue)] \(j.goal) (\(j.currentStepIndex)/\(j.steps.count)) [ID: \(String(j.id.prefix(8)))]")
+                    }
+                }
+            } catch {
+                print("Failed to list jobs: \(error.localizedDescription)")
+            }
+            sema.signal()
+        }
+        sema.wait()
     }
 case "approvals", "approval":
     let sub = args.count > 1 ? args[1].lowercased() : "list"
@@ -401,14 +422,28 @@ case "approvals", "approval":
     if let resp = result.response {
         print(resp.message)
     } else {
-        print("Pearl daemon is not running (cannot inspect approvals).")
+        let sema = DispatchSemaphore(value: 0)
+        Task {
+            let pending = await ApprovalQueue.shared.listPending()
+            if pending.isEmpty {
+                print("No pending approvals.")
+            } else {
+                print("Pending Approvals (\(pending.count)):")
+                for p in pending {
+                    print("  • [\(p.tier)] \(p.toolName) (\(p.reason)) [ID: \(p.id)]")
+                }
+            }
+            sema.signal()
+        }
+        sema.wait()
     }
 case "abort":
     let result = sendIPC(command: "abort")
     if let resp = result.response {
         print(resp.message)
     } else {
-        print("Emergency abort signaled (Pearl daemon offline).")
+        KillSwitch.shared.trigger(reason: "Triggered via CLI abort (offline)")
+        print("Emergency abort signaled locally.")
     }
 case "quit":
     let result = sendIPC(command: "quit")

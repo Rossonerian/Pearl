@@ -128,6 +128,20 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         memSource.resume()
         memoryPressureSource = memSource
         
+        // 7. V3.1 Skill Engine & Global KillSwitch Wiring
+        Task {
+            try? await SkillEngine.shared.seedDefaultSkillsIfEmpty()
+        }
+        _ = KillSwitch.shared.onTrigger { [weak self] _ in
+            DispatchQueue.main.async {
+                LiveSpeechRecognizer.shared.stopListening()
+                SpeechSynthesizerService.shared.stopPlayback()
+                AudioPipelineService.shared.enterStandby()
+                self?.hudPanel?.showPill(text: "Aborted", thinking: false, tierBadge: "kill switch", isLocal: true)
+                self?.hudPanel?.scheduleAutoLeave(after: 2.0, dismissOnAppSwitch: true)
+            }
+        }
+        
         NSLog("[Pearl] Initialized successfully. Resident memory footprint ready.")
     }
     
@@ -285,6 +299,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     private func handleMemoryPressure() {
+        MLXProvider.shared.setMemoryPressure(active: true)
         hudPanel?.hidePill()
         AudioPipelineService.shared.enterStandby()
     }
@@ -344,7 +359,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
             let uptime = Int(Date().timeIntervalSince(launchDate))
             responseData["uptime_seconds"] = "\(uptime)"
             responseData["pid"] = "\(getpid())"
-            responseData["version"] = "2.1.0"
+            responseData["version"] = "3.1.0"
             
         case "status":
             let isVisible = await MainActor.run { hudPanel.isPillVisible }
@@ -388,6 +403,12 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
                     tierBadge: assistantResp.badge.label,
                     isLocal: assistantResp.badge.isLocal
                 )
+                if let decision = assistantResp.outputDecision {
+                    self.hudPanel.scheduleAutoLeave(
+                        after: decision.autoLeaveSeconds,
+                        dismissOnAppSwitch: decision.dismissOnAppSwitch
+                    )
+                }
             }
             
         case "toggle_history":
@@ -489,6 +510,63 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
                 responseMessage = "Memory operation failed: \(error.localizedDescription)"
                 isSuccess = false
             }
+            
+        case "jobs":
+            let sub = req.arguments?["subcommand"] ?? "list"
+            let jobId = req.arguments?["id"] ?? ""
+            do {
+                if sub == "resume", !jobId.isEmpty {
+                    let job = try await PlanExecutor.shared.resumeJob(id: jobId)
+                    responseMessage = "Resumed job \(String(job.id.prefix(8))): status = \(job.status.rawValue) (\(job.currentStepIndex)/\(job.steps.count) steps)"
+                } else if sub == "rollback", !jobId.isEmpty {
+                    let count = try await PlanExecutor.shared.rollbackJob(id: jobId)
+                    responseMessage = "Rolled back job \(String(jobId.prefix(8))): reverted \(count) step(s)."
+                } else {
+                    let jobs = try await JobStore.shared.listJobs()
+                    if jobs.isEmpty {
+                        responseMessage = "No plan jobs recorded."
+                    } else {
+                        let lines = jobs.prefix(15).map { j in
+                            "• [\(j.status.rawValue)] \(j.goal) (\(j.currentStepIndex)/\(j.steps.count)) [ID: \(String(j.id.prefix(8)))]"
+                        }
+                        responseMessage = "Plan Jobs (\(jobs.count)):\n" + lines.joined(separator: "\n")
+                    }
+                }
+            } catch {
+                responseMessage = "Jobs operation failed: \(error.localizedDescription)"
+                isSuccess = false
+            }
+            
+        case "approvals":
+            let sub = req.arguments?["subcommand"] ?? "list"
+            let itemId = req.arguments?["id"] ?? ""
+            do {
+                if sub == "approve", !itemId.isEmpty {
+                    let res = try await ApprovalQueue.shared.approve(id: itemId)
+                    responseMessage = "Approved & executed \(itemId): \(res.message)"
+                    isSuccess = res.success
+                } else if sub == "deny", !itemId.isEmpty {
+                    let item = try await ApprovalQueue.shared.deny(id: itemId)
+                    responseMessage = "Denied approval '\(item.toolName)' [\(item.id)]"
+                } else {
+                    let pending = await ApprovalQueue.shared.listPending()
+                    if pending.isEmpty {
+                        responseMessage = "No pending approvals."
+                    } else {
+                        let lines = pending.map { p in
+                            "• [\(p.tier)] \(p.toolName) (\(p.reason)) [ID: \(p.id)]"
+                        }
+                        responseMessage = "Pending Approvals (\(pending.count)):\n" + lines.joined(separator: "\n")
+                    }
+                }
+            } catch {
+                responseMessage = "Approvals operation failed: \(error.localizedDescription)"
+                isSuccess = false
+            }
+            
+        case "abort":
+            KillSwitch.shared.trigger(reason: "Aborted via CLI IPC")
+            responseMessage = "KillSwitch triggered: active agent execution halted."
             
         default:
             responseMessage = "Unhandled command: \(cmd)"

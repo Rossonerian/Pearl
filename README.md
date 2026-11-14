@@ -1,4 +1,4 @@
-# Pearl (v3.0.0)
+# Pearl (v3.1.0)
 
 > Capable, private, lightweight native macOS personal AI assistant built in compiled Swift for Apple Silicon.
 
@@ -7,7 +7,7 @@
 [![License](https://img.shields.io/badge/license-MIT%20%2F%20Apache--2.0-green.svg)](LICENSE)
 [![Zero Telemetry](https://img.shields.io/badge/telemetry-0%20call%20home-brightgreen.svg)](PRIVACY.md)
 [![MCP Compliant](https://img.shields.io/badge/MCP-2024--11--05-purple.svg)](docs/MCP.md)
-[![Tests](https://img.shields.io/badge/tests-96%2F96%20passed%20(100%25)-brightgreen.svg)](Tests/)
+[![Tests](https://img.shields.io/badge/tests-156%2F156%20passed%20(100%25)-brightgreen.svg)](Tests/)
 
 ---
 
@@ -52,8 +52,15 @@ It presents an ultra-responsive floating pill HUD beneath the display notch, sup
 6. **Hardened Safety & Formal Quality Suite**:
    - 100.00% deterministic routing accuracy on 851 golden utterances (0 wrong actions, 0 false triggers on negations).
    - 100% malicious shell command interception (220/220) and prompt injection rejection (110/110).
-   - 96 / 96 unit tests passing across `PearlCoreTests`, `PearlMemoryTests`, and `PearlToolsTests`.
+   - 156 / 156 unit tests passing across `PearlCoreTests`, `PearlMemoryTests`, and `PearlToolsTests`.
    - Comprehensive GitHub Actions CI runner (`.github/workflows/ci.yml`).
+
+7. **V3.1 Agent Harness, Adaptive Output & Expanded macOS Access**:
+   - **Adaptive OutputDirector ("Talk Back & Leave")**: Chooses `.speakFull`, `.speakSummaryAndHUD` (concise voice summary for long/code/list responses), `.hudOnly`, or `.silentNotification`, and auto-dismisses the HUD on timeout or frontmost app switch (event-driven, zero polling).
+   - **Bounded Agent Harness**: `PlanExecutor` (8-step cap, memory guard, LIFO `UndoJournal` rollback), SQLite `JobStore` checkpoints, `ApprovalQueue` for away/high-tier actions, and global `KillSwitch` (`pearl abort`).
+   - **On-Demand Local MLX Brain**: Optional lazy-loaded `MLXProvider` (~1.5B 4-bit) with memory-pressure refusal and 30s idle auto-unload (`0 MB` idle footprint).
+   - **Expanded Tiered Tools & Screen OCR**: Allowlisted `FileTools`, `WindowTool`, `ShortcutsTool`, `BrowserTool`, `CommunicationDraftTool` (Mail drafts without auto-send; `send_mail` strictly T4 confirmed), and in-memory `ScreenCaptureKit` + Vision OCR (`read_screen_text`).
+   - **Declarative Markdown Skills & Smart Nudges**: Inspectable skills in `~/Library/Application Support/Pearl/skills/*.md` (`start-workday`, `meeting-prep`), proactive nudges with quiet hours, and user-approved preference learning.
 
 ---
 

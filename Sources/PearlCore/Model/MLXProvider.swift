@@ -21,6 +21,7 @@ public enum MLXProviderError: Error, LocalizedError, Sendable, Equatable {
 }
 
 public final class MLXProvider: ModelProvider, @unchecked Sendable {
+    public static let shared = MLXProvider()
     public let name = "MLX-Local"
     public let modelID: String
     public let isLocal = true

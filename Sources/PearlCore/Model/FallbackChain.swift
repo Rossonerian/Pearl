@@ -19,7 +19,7 @@ public final class FallbackChain: Sendable {
     
     public init(
         appleFM: AppleFMProvider = AppleFMProvider(),
-        mlxProvider: MLXProvider = MLXProvider(),
+        mlxProvider: MLXProvider = .shared,
         frontier: FrontierProvider = FrontierProvider(),
         pccEnabled: Bool = PearlConfig.load().pccEnabled,
         mlxEnabled: Bool = PearlConfig.load().mlxEnabled

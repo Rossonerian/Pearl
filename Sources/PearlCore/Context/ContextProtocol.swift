@@ -42,4 +42,9 @@ public protocol MemoryContextProvider: Sendable {
     func assembleContext(query: String) async throws -> String
     func explicitRemember(fact: String, trust: TrustLevel) async throws -> String
     func forget(factId: String) async throws -> Bool
+    func proposePreferenceIfApplicable(utterance: String, trust: TrustLevel) async
+}
+
+public extension MemoryContextProvider {
+    func proposePreferenceIfApplicable(utterance: String, trust: TrustLevel) async {}
 }
