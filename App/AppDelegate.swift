@@ -127,18 +127,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     private func registerNativeTools() {
-        let reg = ToolRegistry.shared
-        reg.register(BatteryTool())
-        reg.register(VolumeTool())
-        reg.register(AppTool())
-        reg.register(CloseAppTool())
-        reg.register(ScreenshotTool())
-        reg.register(TrashScreenshotsTool())
-        reg.register(GitTool())
-        reg.register(GitStatusTool())
-        reg.register(FrontmostAppTool())
-        reg.register(UndoTool())
-        reg.register(ReminderTool())
+        PearlToolsRegistry.registerAll(into: ToolRegistry.shared, catalog: CentralToolCatalog.shared)
     }
     
     private func toggleHUD() {
