@@ -1,0 +1,29 @@
+import Foundation
+import PearlCore
+
+/// Canonical implementation of `MemoryContextProvider` bridging `PearlMemory`
+/// storage, learning gates, and FTS5 retrieval into `AssistantPipeline`.
+public final class PearlMemoryProvider: MemoryContextProvider, Sendable {
+    public static let shared = PearlMemoryProvider()
+    
+    public init() {}
+    
+    public func assembleContext(query: String) async throws -> String {
+        let store = try MemoryStore()
+        let context = try await ContextAssembler.assemble(query: query, store: store)
+        return context.promptSection
+    }
+    
+    public func explicitRemember(fact: String, trust: TrustLevel) async throws -> String {
+        let store = try MemoryStore()
+        let gate = try LearningGate(store: store)
+        let (factId, _) = try await gate.explicitRemember(fact: fact, source: "user", trust: trust)
+        return factId
+    }
+    
+    public func forget(factId: String) async throws -> Bool {
+        let store = try MemoryStore()
+        let gate = try LearningGate(store: store)
+        return try await gate.forget(factId: factId)
+    }
+}

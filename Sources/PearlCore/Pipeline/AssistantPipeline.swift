@@ -91,7 +91,7 @@ public struct AssistantResponse: Sendable {
 /// 14. Generate response
 /// 15. Deliver text and speech
 /// 16. Record appropriate audit events
-public final class AssistantPipeline: Sendable {
+public final class AssistantPipeline: @unchecked Sendable {
     public static let shared = AssistantPipeline()
     
     private let router: DeterministicRouter
@@ -99,6 +99,22 @@ public final class AssistantPipeline: Sendable {
     private let policyEngine: PolicyEngine
     private let toolExecutor: ModelToolExecutor
     private let fallbackChain: FallbackChain
+    
+    private let lock = NSLock()
+    private var _memoryProvider: (any MemoryContextProvider)?
+    
+    public var memoryProvider: (any MemoryContextProvider)? {
+        get {
+            lock.lock()
+            defer { lock.unlock() }
+            return _memoryProvider
+        }
+        set {
+            lock.lock()
+            defer { lock.unlock() }
+            _memoryProvider = newValue
+        }
+    }
     
     public init(
         router: DeterministicRouter = .shared,
@@ -165,9 +181,40 @@ public final class AssistantPipeline: Sendable {
             }
         }
         
-        // 5. Classify intent via Deterministic Router (L0)
+        // 5. Memory Operations (Explicit Remember)
+        if let memoryFact = extractExplicitMemoryFact(from: trimmed) {
+            if let provider = memoryProvider {
+                do {
+                    let factId = try await provider.explicitRemember(fact: memoryFact, trust: effectiveTrust)
+                    let badge = HUDTurnBadge(
+                        label: "remembered",
+                        provider: "MemoryStore",
+                        modelID: "explicit",
+                        isLocal: true,
+                        details: "id: \(factId)"
+                    )
+                    return AssistantResponse(
+                        id: request.id,
+                        success: true,
+                        responseText: "Remembered: '\(memoryFact)'.",
+                        badge: badge,
+                        latencyMs: elapsedMs(),
+                        memoryUpdated: true
+                    )
+                } catch {
+                    return AssistantResponse(
+                        id: request.id,
+                        success: false,
+                        responseText: "Could not save fact: \(error.localizedDescription)",
+                        badge: HUDTurnBadge(label: "error", provider: "MemoryStore", modelID: "gate", isLocal: true),
+                        latencyMs: elapsedMs()
+                    )
+                }
+            }
+        }
+        
+        // 6. Classify intent via Deterministic Router (L0)
         if let intent = router.resolve(utterance: trimmed) {
-            // L0 Route: instant deterministic tool execution
             if let tool = toolRegistry.tool(named: intent.toolName) {
                 let toolContext = ToolExecutionContext(
                     trustState: effectiveTrust,
@@ -214,15 +261,22 @@ public final class AssistantPipeline: Sendable {
             }
         }
         
-        // 6 & 7. Fallback Route: Model Inference with ModelToolExecutor
+        // 7. Dynamic Context Assembly & Memory Retrieval
+        var memorySection: String? = nil
+        if let provider = memoryProvider {
+            memorySection = try? await provider.assembleContext(query: trimmed)
+        }
+        
         let modelContext = ModelExecutionContext(
+            systemPrompt: memorySection,
             trustState: effectiveTrust,
             forceEscalation: request.forceEscalation
         )
         
+        // 8. Fallback Route: Model Inference with ModelToolExecutor
         let modelRes = await fallbackChain.process(utterance: trimmed, context: modelContext)
         
-        // 8 & 9 & 10 & 11. Execute Model-Generated Tool Calls if present
+        // 9 & 10 & 11. Execute Model-Generated Tool Calls if present
         if !modelRes.toolCalls.isEmpty {
             let toolContext = ToolExecutionContext(
                 trustState: effectiveTrust,
@@ -258,5 +312,22 @@ public final class AssistantPipeline: Sendable {
             latencyMs: elapsedMs(),
             toolResults: []
         )
+    }
+    
+    private func extractExplicitMemoryFact(from text: String) -> String? {
+        let lower = text.lowercased()
+        let prefixes = [
+            "remember that ", "remember this: ", "remember: ", "remember ",
+            "pearl remember that ", "pearl remember ", "please remember that ", "please remember "
+        ]
+        for p in prefixes {
+            if lower.hasPrefix(p) {
+                let fact = String(text.dropFirst(p.count)).trimmingCharacters(in: .whitespacesAndNewlines)
+                if !fact.isEmpty && fact.count <= 500 {
+                    return fact
+                }
+            }
+        }
+        return nil
     }
 }

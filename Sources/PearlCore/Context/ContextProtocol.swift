@@ -36,3 +36,10 @@ public protocol MemorySnippetProtocol: Sendable {
     var content: String { get }
     var bm25Score: Double { get }
 }
+
+/// Abstract provider interface connecting PearlMemory to the core assistant pipeline.
+public protocol MemoryContextProvider: Sendable {
+    func assembleContext(query: String) async throws -> String
+    func explicitRemember(fact: String, trust: TrustLevel) async throws -> String
+    func forget(factId: String) async throws -> Bool
+}
