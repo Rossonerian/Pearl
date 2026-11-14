@@ -80,23 +80,23 @@
 
 1. `audit/v3-repo-audit`: Deliver Phase M0 audit, feature matrix, dependency map, risk register, design specification, and source of truth. (Merged to `main`)
 2. `fix/v2.1-stabilization`: Implement `AssistantPipeline`, `ModelToolExecutor`, tool tier corrections, `AsyncUnixSocketServer`, and audit boot verification. (Merged to `main`, tagged `v2.1.0`)
-3. `feat/v3-memory`: Implement canonical SQLite structured storage with 6 memory classes. (Active: Subagent `c5fad116`)
-4. `feat/v3-conversation`: Multi-turn session history, streaming, and reference resolution. (Active: Subagent `d6178a66`)
-5. `feat/v3-macos-capabilities`: EventKit calendar, expanded window and system context. (Active: Subagent `83ec2684`)
-6. `feat/v3-voice`: Unified audio capture service and conversation HUD view. (Active: Subagent `48171829`)
-7. `feat/v3-task-engine`: Persistent `TaskStore.sqlite` with reminder synchronization. (Active: Subagent `2f845828`)
-8. `test/v3-quality-suite`: SwiftPM XCTest targets and GitHub Actions CI runner. (Active: Subagent `cba1a328`)
+3. `feat/v3-memory`: Implement canonical SQLite structured storage with 6 memory classes. (Completed & Pushed: `07bc037`)
+4. `feat/v3-conversation`: Multi-turn session history, streaming, and reference resolution. (Completed & Pushed: `2044e84`)
+5. `feat/v3-macos-capabilities`: EventKit calendar, expanded window and system context. (Completed & Pushed: `e61facf`)
+6. `feat/v3-voice`: Unified audio capture service and conversation HUD view. (Completed & Pushed: `e2daa9f`)
+7. `feat/v3-task-engine`: Persistent `TaskStore.sqlite` with reminder synchronization. (Completed & Pushed: `e41df29`)
+8. `test/v3-quality-suite`: SwiftPM XCTest targets and GitHub Actions CI runner. (Active: Subagent `cba1a328` ~95%)
 9. `release/v3.0.0`: Packaging, Homebrew cask updates, and reproducible verification.
 
 ---
 
-## 7. Active V3 Parallel Swarm Deployment Status (~60% Overall Progress)
+## 7. Active V3 Parallel Swarm Deployment Status (~95% Overall Progress)
 
-| Worktree Path | Branch | Owner / Role | Milestone Focus | Status |
-| :--- | :--- | :--- | :--- | :--- |
-| `/Users/rossonerian/Projects/Pearl` | `feat/v3-memory` | Subagent `c5fad116` | Phase M2 (Memory V3 SQLite & 6 Classes) | **Completed (100%)** |
-| `/Users/rossonerian/Projects/Pearl-worktrees/feat-v3-macos-capabilities` | `feat/v3-macos-capabilities` | Subagent `83ec2684` | Phase M4 (EventKit Calendar, Display, Clipboard) | In Progress (~50%) |
-| `/Users/rossonerian/Projects/Pearl-worktrees/feat-v3-conversation` | `feat/v3-conversation` | Subagent `d6178a66` | Phase M3 (SessionManager, Context Reference Resolver) | In Progress (~50%) |
-| `/Users/rossonerian/Projects/Pearl-worktrees/test-v3-quality-suite` | `test/v3-quality-suite` | Subagent `cba1a328` | Phase M8 (XCTest Targets, GitHub Actions CI) | In Progress (~50%) |
-| `/Users/rossonerian/Projects/Pearl-worktrees/feat-v3-voice` | `feat/v3-voice` | Subagent `48171829` | Phase M5 (Unified AVAudioEngine, Interactive HUD) | In Progress (~40%) |
-| `/Users/rossonerian/Projects/Pearl-worktrees/feat-v3-task-engine` | `feat/v3-task-engine` | Subagent `2f845828` | Phase M6/M7 (TaskStore.sqlite, Proactive Briefing) | In Progress (~40%) |
+| Worktree Path | Branch | Owner / Role | Milestone Focus | Commit | Status |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| `/Users/rossonerian/Projects/Pearl` | `feat/v3-memory` | Subagent `c5fad116` | Phase M2 (Memory V3 SQLite & 6 Classes) | `07bc037` | **100% COMPLETE & PUSHED** |
+| `/Users/rossonerian/Projects/Pearl-worktrees/feat-v3-conversation` | `feat/v3-conversation` | Subagent `d6178a66` | Phase M3 (SessionManager, Context Reference Resolver) | `2044e84` | **100% COMPLETE & PUSHED** |
+| `/Users/rossonerian/Projects/Pearl-worktrees/feat-v3-macos-capabilities` | `feat/v3-macos-capabilities` | Subagent `83ec2684` | Phase M4 (EventKit Calendar, Display, Clipboard) | `e61facf` | **100% COMPLETE & PUSHED** |
+| `/Users/rossonerian/Projects/Pearl-worktrees/feat-v3-voice` | `feat/v3-voice` | Subagent `48171829` | Phase M5 (Unified AVAudioEngine, Interactive HUD) | `e2daa9f` | **100% COMPLETE & PUSHED** |
+| `/Users/rossonerian/Projects/Pearl-worktrees/feat-v3-task-engine` | `feat/v3-task-engine` | Subagent `2f845828` | Phase M6/M7 (TaskStore.sqlite, Proactive Briefing) | `e41df29` | **100% COMPLETE & PUSHED** |
+| `/Users/rossonerian/Projects/Pearl-worktrees/test-v3-quality-suite` | `test/v3-quality-suite` | Subagent `cba1a328` | Phase M8 (XCTest Targets, GitHub Actions CI) | - | In Progress (~95%) |
