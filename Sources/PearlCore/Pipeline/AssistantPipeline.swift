@@ -50,6 +50,7 @@ public struct AssistantResponse: Sendable {
     public let latencyMs: Double
     public let toolResults: [ToolResult]
     public let memoryUpdated: Bool
+    public let outputDecision: OutputDecision?
     
     public init(
         id: String,
@@ -59,7 +60,8 @@ public struct AssistantResponse: Sendable {
         badge: HUDTurnBadge,
         latencyMs: Double,
         toolResults: [ToolResult] = [],
-        memoryUpdated: Bool = false
+        memoryUpdated: Bool = false,
+        outputDecision: OutputDecision? = nil
     ) {
         self.id = id
         self.success = success
@@ -69,6 +71,7 @@ public struct AssistantResponse: Sendable {
         self.latencyMs = latencyMs
         self.toolResults = toolResults
         self.memoryUpdated = memoryUpdated
+        self.outputDecision = outputDecision
     }
 }
 
@@ -149,22 +152,36 @@ public final class AssistantPipeline: @unchecked Sendable {
         // 1 & 2. Validate input
         let trimmed = request.utterance.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
+            let decision = OutputDirector.shared.decide(
+                responseText: "Pearl standing by.",
+                origin: request.origin
+            )
             return AssistantResponse(
                 id: request.id,
                 success: true,
                 responseText: "Pearl standing by.",
+                speechText: decision.spokenText ?? "",
                 badge: HUDTurnBadge(label: "ready", provider: "Pearl", modelID: "idle", isLocal: true),
-                latencyMs: elapsedMs()
+                latencyMs: elapsedMs(),
+                outputDecision: decision
             )
         }
         
         if trimmed.count > 8192 {
+            let resp = "Request rejected: input length exceeds maximum 8192 characters."
+            let decision = OutputDirector.shared.decide(
+                responseText: resp,
+                origin: request.origin,
+                isError: true
+            )
             return AssistantResponse(
                 id: request.id,
                 success: false,
-                responseText: "Request rejected: input length exceeds maximum 8192 characters.",
+                responseText: resp,
+                speechText: decision.spokenText ?? "",
                 badge: HUDTurnBadge(label: "error", provider: "Validation", modelID: "guard", isLocal: true),
-                latencyMs: elapsedMs()
+                latencyMs: elapsedMs(),
+                outputDecision: decision
             )
         }
         
@@ -177,12 +194,22 @@ public final class AssistantPipeline: @unchecked Sendable {
         let negationPatterns = ["don't", "dont", "do not", "never mind", "cancel that", "abort", "ignore that", "stop"]
         for neg in negationPatterns {
             if lower == neg || lower.hasPrefix(neg + " ") || lower.hasSuffix(" " + neg) || lower.contains(" " + neg + " ") {
+                if neg == "abort" || neg == "stop" || neg == "cancel that" {
+                    KillSwitch.shared.trigger(reason: "User verbal cancellation: '\(neg)'")
+                }
+                let resp = "Action cancelled."
+                let decision = OutputDirector.shared.decide(
+                    responseText: resp,
+                    origin: request.origin
+                )
                 return AssistantResponse(
                     id: request.id,
                     success: true,
-                    responseText: "Action cancelled.",
+                    responseText: resp,
+                    speechText: decision.spokenText ?? "",
                     badge: HUDTurnBadge(label: "cancelled", provider: "Guard", modelID: "negation", isLocal: true),
-                    latencyMs: elapsedMs()
+                    latencyMs: elapsedMs(),
+                    outputDecision: decision
                 )
             }
         }
@@ -212,22 +239,37 @@ public final class AssistantPipeline: @unchecked Sendable {
                         latencyMs: duration
                     )
                     await sessionManager.recordTurn(turn, sessionID: request.sessionID)
+                    let resp = "Remembered: '\(memoryFact)'."
+                    let decision = OutputDirector.shared.decide(
+                        responseText: resp,
+                        origin: request.origin
+                    )
                     return AssistantResponse(
                         id: request.id,
                         success: true,
-                        responseText: "Remembered: '\(memoryFact)'.",
+                        responseText: resp,
+                        speechText: decision.spokenText ?? "",
                         badge: badge,
                         latencyMs: duration,
-                        memoryUpdated: true
+                        memoryUpdated: true,
+                        outputDecision: decision
                     )
                 } catch {
                     let duration = elapsedMs()
+                    let resp = "Could not save fact: \(error.localizedDescription)"
+                    let decision = OutputDirector.shared.decide(
+                        responseText: resp,
+                        origin: request.origin,
+                        isError: true
+                    )
                     return AssistantResponse(
                         id: request.id,
                         success: false,
-                        responseText: "Could not save fact: \(error.localizedDescription)",
+                        responseText: resp,
+                        speechText: decision.spokenText ?? "",
                         badge: HUDTurnBadge(label: "error", provider: "MemoryStore", modelID: "gate", isLocal: true),
-                        latencyMs: duration
+                        latencyMs: duration,
+                        outputDecision: decision
                     )
                 }
             }
@@ -244,6 +286,18 @@ public final class AssistantPipeline: @unchecked Sendable {
                 effectiveUtterance = resolution.resolvedUtterance
                 preResolvedIntent = resolution.resolvedIntent
             }
+        }
+        
+        // 5.7. Declarative Markdown Skills / Multi-Step Macros
+        await SkillEngine.shared.ensureSeeded()
+        if let skill = await SkillEngine.shared.matchSkill(for: effectiveUtterance) {
+            return await executeMatchedSkill(
+                skill,
+                request: request,
+                effectiveUtterance: effectiveUtterance,
+                effectiveTrust: effectiveTrust,
+                elapsedMs: elapsedMs
+            )
         }
         
         // 6. Classify intent via Deterministic Router (L0)
@@ -288,13 +342,24 @@ public final class AssistantPipeline: @unchecked Sendable {
                     )
                     await sessionManager.recordTurn(turn, sessionID: request.sessionID)
                     
+                    let isConfirmation = toolRes.message.localizedCaseInsensitiveContains("confirmation required") ||
+                                         toolRes.message.localizedCaseInsensitiveContains("user confirmation required")
+                    let decision = OutputDirector.shared.decide(
+                        responseText: toolRes.message,
+                        origin: request.origin,
+                        isError: !toolRes.success && !isConfirmation,
+                        requiresConfirmation: isConfirmation
+                    )
+                    
                     return AssistantResponse(
                         id: request.id,
                         success: toolRes.success,
                         responseText: toolRes.message,
+                        speechText: decision.spokenText ?? "",
                         badge: badge,
                         latencyMs: duration,
-                        toolResults: [toolRes]
+                        toolResults: [toolRes],
+                        outputDecision: decision
                     )
                 } catch {
                     let duration = elapsedMs()
@@ -311,22 +376,38 @@ public final class AssistantPipeline: @unchecked Sendable {
                     )
                     await sessionManager.recordTurn(errorTurn, sessionID: request.sessionID)
                     
+                    let errorMsg = "Execution error: \(error.localizedDescription)"
+                    let decision = OutputDirector.shared.decide(
+                        responseText: errorMsg,
+                        origin: request.origin,
+                        isError: true
+                    )
                     return AssistantResponse(
                         id: request.id,
                         success: false,
-                        responseText: "Execution error: \(error.localizedDescription)",
+                        responseText: errorMsg,
+                        speechText: decision.spokenText ?? "",
                         badge: HUDTurnBadge(label: "error", provider: "PolicyEngine", modelID: intent.toolName, isLocal: true),
-                        latencyMs: duration
+                        latencyMs: duration,
+                        outputDecision: decision
                     )
                 }
             } else {
                 let duration = elapsedMs()
+                let errorMsg = "Tool '\(intent.toolName)' not registered."
+                let decision = OutputDirector.shared.decide(
+                    responseText: errorMsg,
+                    origin: request.origin,
+                    isError: true
+                )
                 return AssistantResponse(
                     id: request.id,
                     success: false,
-                    responseText: "Tool '\(intent.toolName)' not registered.",
+                    responseText: errorMsg,
+                    speechText: decision.spokenText ?? "",
                     badge: HUDTurnBadge(label: "error", provider: "ToolRegistry", modelID: "missing", isLocal: true),
-                    latencyMs: duration
+                    latencyMs: duration,
+                    outputDecision: decision
                 )
             }
         }
@@ -357,6 +438,78 @@ public final class AssistantPipeline: @unchecked Sendable {
                 taintState: request.clientTaintState,
                 freshConfirmationArgs: request.freshConfirmationArgs
             )
+            
+            if modelRes.toolCalls.count >= 2 {
+                // Multi-step model plan -> route through bounded PlanExecutor harness
+                KillSwitch.shared.reset()
+                let planSteps: [PlanStep] = modelRes.toolCalls.enumerated().map { idx, call in
+                    let registeredTool = toolRegistry.tool(named: call.toolName)
+                    return PlanStep(
+                        index: idx,
+                        description: call.toolName,
+                        toolName: call.toolName,
+                        arguments: call.arguments,
+                        status: .pending,
+                        resultMessage: nil,
+                        reversible: registeredTool?.isReversible ?? false
+                    )
+                }
+                do {
+                    let job = try await PlanExecutor.shared.executePlan(
+                        goal: effectiveUtterance,
+                        steps: planSteps,
+                        context: toolContext
+                    )
+                    let duration = elapsedMs()
+                    let stepLines = job.steps.map { step in
+                        "• [\(step.status.rawValue)] \(step.toolName): \(step.resultMessage ?? "")"
+                    }
+                    let summaryMsg = stepLines.joined(separator: "\n")
+                    let isConfirmation = job.status == .pausedForApproval
+                    let finalMsg = isConfirmation
+                        ? "Confirmation required for multi-step plan '\(job.goal)' (Job \(String(job.id.prefix(8))))."
+                        : summaryMsg
+                    let toolRecords = job.steps.map { step in
+                        ToolExecutionRecord(
+                            toolName: step.toolName,
+                            arguments: step.arguments,
+                            success: step.status == .completed,
+                            resultMessage: step.resultMessage ?? "",
+                            durationMs: duration
+                        )
+                    }
+                    let turn = ConversationTurn(
+                        turnId: UUID(),
+                        timestamp: Date(),
+                        rawInput: request.utterance,
+                        cleanedInput: effectiveUtterance,
+                        resolvedIntent: nil,
+                        toolInvocations: toolRecords,
+                        assistantResponse: finalMsg,
+                        tokenUsage: modelRes.usage,
+                        latencyMs: duration
+                    )
+                    await sessionManager.recordTurn(turn, sessionID: request.sessionID)
+                    let decision = OutputDirector.shared.decide(
+                        responseText: finalMsg,
+                        origin: request.origin,
+                        isError: job.status == .failed || job.status == .aborted,
+                        requiresConfirmation: isConfirmation
+                    )
+                    return AssistantResponse(
+                        id: request.id,
+                        success: job.status == .completed,
+                        responseText: finalMsg,
+                        speechText: decision.spokenText ?? "",
+                        badge: modelRes.badge,
+                        latencyMs: duration,
+                        toolResults: [],
+                        outputDecision: decision
+                    )
+                } catch {
+                    // Fall through to standard single-turn executor on harness setup error
+                }
+            }
             
             let summary = await toolExecutor.executeToolCalls(
                 modelRes.toolCalls,
@@ -389,17 +542,30 @@ public final class AssistantPipeline: @unchecked Sendable {
             )
             await sessionManager.recordTurn(turn, sessionID: request.sessionID)
             
+            let isConfirmation = finalMessage.localizedCaseInsensitiveContains("confirmation required") ||
+                                 finalMessage.localizedCaseInsensitiveContains("user confirmation required") ||
+                                 summary.results.contains { $0.message.localizedCaseInsensitiveContains("confirmation required") }
+            let decision = OutputDirector.shared.decide(
+                responseText: finalMessage,
+                origin: request.origin,
+                isError: summary.toolCallsSucceeded == 0 && !modelRes.toolCalls.isEmpty && !isConfirmation,
+                requiresConfirmation: isConfirmation
+            )
+            
             return AssistantResponse(
                 id: request.id,
                 success: summary.toolCallsSucceeded > 0 || modelRes.toolCalls.isEmpty,
                 responseText: finalMessage,
+                speechText: decision.spokenText ?? "",
                 badge: modelRes.badge,
                 latencyMs: duration,
-                toolResults: summary.results
+                toolResults: summary.results,
+                outputDecision: decision
             )
         }
         
         // Conversational response without tool calls
+        await memoryProvider?.proposePreferenceIfApplicable(utterance: trimmed, trust: effectiveTrust)
         let duration = elapsedMs()
         let turn = ConversationTurn(
             turnId: UUID(),
@@ -414,14 +580,135 @@ public final class AssistantPipeline: @unchecked Sendable {
         )
         await sessionManager.recordTurn(turn, sessionID: request.sessionID)
         
+        let isConfirmation = modelRes.content.localizedCaseInsensitiveContains("confirmation required") ||
+                             modelRes.content.localizedCaseInsensitiveContains("user confirmation required")
+        let decision = OutputDirector.shared.decide(
+            responseText: modelRes.content,
+            origin: request.origin,
+            requiresConfirmation: isConfirmation
+        )
+        
         return AssistantResponse(
             id: request.id,
             success: true,
             responseText: modelRes.content,
+            speechText: decision.spokenText ?? "",
             badge: modelRes.badge,
             latencyMs: duration,
-            toolResults: []
+            toolResults: [],
+            outputDecision: decision
         )
+    }
+    
+    private func executeMatchedSkill(
+        _ skill: SkillDefinition,
+        request: AssistantRequest,
+        effectiveUtterance: String,
+        effectiveTrust: TrustLevel,
+        elapsedMs: () -> Double
+    ) async -> AssistantResponse {
+        KillSwitch.shared.reset()
+        var planSteps: [PlanStep] = []
+        for (idx, stepDef) in skill.steps.enumerated() {
+            if let intent = router.resolve(utterance: stepDef.utterance) {
+                let reversible = toolRegistry.tool(named: intent.toolName)?.isReversible ?? false
+                planSteps.append(PlanStep(
+                    index: idx,
+                    description: stepDef.description,
+                    toolName: intent.toolName,
+                    arguments: intent.arguments,
+                    status: .pending,
+                    resultMessage: nil,
+                    reversible: reversible
+                ))
+            }
+        }
+        
+        guard !planSteps.isEmpty else {
+            let msg = "Skill '\(skill.name)' contains no deterministically resolvable tool steps."
+            let duration = elapsedMs()
+            let decision = OutputDirector.shared.decide(responseText: msg, origin: request.origin, isError: true)
+            return AssistantResponse(
+                id: request.id,
+                success: false,
+                responseText: msg,
+                speechText: decision.spokenText ?? "",
+                badge: HUDTurnBadge(label: "skill", provider: "SkillEngine", modelID: skill.name, isLocal: true),
+                latencyMs: duration,
+                outputDecision: decision
+            )
+        }
+        
+        let toolContext = ToolExecutionContext(
+            trustState: effectiveTrust,
+            userConfirmed: request.userConfirmed,
+            providerIsLocal: true,
+            taintState: request.clientTaintState,
+            freshConfirmationArgs: request.freshConfirmationArgs
+        )
+        
+        do {
+            let job = try await PlanExecutor.shared.executePlan(
+                goal: "Skill: \(skill.name)",
+                steps: planSteps,
+                context: toolContext
+            )
+            let duration = elapsedMs()
+            let lines = job.steps.map { step in
+                "• [\(step.status.rawValue)] \(step.description): \(step.resultMessage ?? "")"
+            }
+            let summaryText = "Ran skill '\(skill.name)' (\(job.status.rawValue)):\n" + lines.joined(separator: "\n")
+            let isConfirmation = job.status == .pausedForApproval
+            let decision = OutputDirector.shared.decide(
+                responseText: summaryText,
+                origin: request.origin,
+                isError: job.status == .failed || job.status == .aborted,
+                requiresConfirmation: isConfirmation
+            )
+            let records = job.steps.map { step in
+                ToolExecutionRecord(
+                    toolName: step.toolName,
+                    arguments: step.arguments,
+                    success: step.status == .completed,
+                    resultMessage: step.resultMessage ?? "",
+                    durationMs: duration
+                )
+            }
+            let turn = ConversationTurn(
+                turnId: UUID(),
+                timestamp: Date(),
+                rawInput: request.utterance,
+                cleanedInput: effectiveUtterance,
+                resolvedIntent: nil,
+                toolInvocations: records,
+                assistantResponse: summaryText,
+                tokenUsage: nil,
+                latencyMs: duration
+            )
+            await sessionManager.recordTurn(turn, sessionID: request.sessionID)
+            return AssistantResponse(
+                id: request.id,
+                success: job.status == .completed,
+                responseText: summaryText,
+                speechText: decision.spokenText ?? "",
+                badge: HUDTurnBadge(label: "skill", provider: "SkillEngine", modelID: skill.name, isLocal: true),
+                latencyMs: duration,
+                outputDecision: decision
+            )
+        } catch {
+            let duration = elapsedMs()
+            let msg = "Skill execution failed: \(error.localizedDescription)"
+            let decision = OutputDirector.shared.decide(responseText: msg, origin: request.origin, isError: true)
+            return AssistantResponse(
+                id: request.id,
+                success: false,
+                responseText: msg,
+                speechText: decision.spokenText ?? "",
+                badge: HUDTurnBadge(label: "error", provider: "SkillEngine", modelID: skill.name, isLocal: true),
+                latencyMs: duration,
+                outputDecision: decision
+            )
+        }
     }
     
     private func extractExplicitMemoryFact(from text: String) -> String? {

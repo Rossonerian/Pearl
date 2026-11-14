@@ -26,4 +26,12 @@ public final class PearlMemoryProvider: MemoryContextProvider, Sendable {
         let gate = try LearningGate(store: store)
         return try await gate.forget(factId: factId)
     }
+    
+    public func proposePreferenceIfApplicable(utterance: String, trust: TrustLevel) async {
+        guard let store = try? MemoryStore(),
+              let gate = try? LearningGate(store: store) else {
+            return
+        }
+        _ = try? await gate.detectAndProposePreference(from: utterance, source: "user", trust: trust)
+    }
 }

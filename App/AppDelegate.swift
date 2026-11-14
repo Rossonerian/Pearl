@@ -17,6 +17,12 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     private var onboardingWindow: NSWindow?
     private let launchDate = Date()
     
+    private struct PendingAutoLeave {
+        let seconds: TimeInterval
+        let dismissOnAppSwitch: Bool
+    }
+    private var pendingAutoLeave: PendingAutoLeave?
+    
     public func applicationDidFinishLaunching(_ notification: Notification) {
         NSApplication.shared.setActivationPolicy(.accessory)
         
@@ -69,10 +75,15 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         
         SpeechSynthesizerService.shared.onPlaybackFinished = { [weak self] in
-            DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+            DispatchQueue.main.async {
                 guard let self = self else { return }
-                if !LiveSpeechRecognizer.shared.active && !SpeechSynthesizerService.shared.speaking {
-                    self.hudPanel.hidePill()
+                if let pending = self.pendingAutoLeave {
+                    self.pendingAutoLeave = nil
+                    if pending.seconds > 0 {
+                        self.hudPanel.scheduleAutoLeave(after: pending.seconds, dismissOnAppSwitch: pending.dismissOnAppSwitch)
+                    }
+                } else {
+                    self.hudPanel.scheduleAutoLeave(after: 4.0, dismissOnAppSwitch: true)
                 }
             }
         }
@@ -116,6 +127,20 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         memSource.resume()
         memoryPressureSource = memSource
+        
+        // 7. V3.1 Skill Engine & Global KillSwitch Wiring
+        Task {
+            try? await SkillEngine.shared.seedDefaultSkillsIfEmpty()
+        }
+        _ = KillSwitch.shared.onTrigger { [weak self] _ in
+            DispatchQueue.main.async {
+                LiveSpeechRecognizer.shared.stopListening()
+                SpeechSynthesizerService.shared.stopPlayback()
+                AudioPipelineService.shared.enterStandby()
+                self?.hudPanel?.showPill(text: "Aborted", thinking: false, tierBadge: "kill switch", isLocal: true)
+                self?.hudPanel?.scheduleAutoLeave(after: 2.0, dismissOnAppSwitch: true)
+            }
+        }
         
         NSLog("[Pearl] Initialized successfully. Resident memory footprint ready.")
     }
@@ -175,7 +200,14 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
                 let isConfirmation = response.responseText.localizedCaseInsensitiveContains("confirmation required") ||
                                      response.responseText.localizedCaseInsensitiveContains("user confirmation required")
                 
-                if isConfirmation {
+                let decision = response.outputDecision ?? OutputDirector.shared.decide(
+                    responseText: response.responseText,
+                    speechText: response.speechText,
+                    origin: .voice,
+                    requiresConfirmation: isConfirmation
+                )
+                
+                if isConfirmation || decision.autoLeaveSeconds == 0 {
                     let toolName = response.badge.modelID.isEmpty ? "Action" : response.badge.modelID
                     self.hudPanel.showConfirmation(
                         toolName: toolName,
@@ -190,41 +222,84 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
                                 )
                                 let confirmedResp = await AssistantPipeline.shared.process(request: confirmedReq)
                                 await MainActor.run {
-                                    self?.hudPanel.recordTurn(
+                                    guard let self = self else { return }
+                                    self.hudPanel.recordTurn(
                                         userUtterance: "Confirmed: \(utterance)",
                                         assistantResponse: confirmedResp.responseText,
                                         badgeLabel: confirmedResp.badge.label,
                                         isLocal: confirmedResp.badge.isLocal,
                                         latencyMs: confirmedResp.latencyMs
                                     )
-                                    self?.hudPanel.showPill(
-                                        text: confirmedResp.responseText,
+                                    let confirmedDecision = confirmedResp.outputDecision ?? OutputDirector.shared.decide(
+                                        responseText: confirmedResp.responseText,
+                                        speechText: confirmedResp.speechText,
+                                        origin: .voice
+                                    )
+                                    self.hudPanel.showPill(
+                                        text: confirmedDecision.hudText,
                                         thinking: false,
                                         tierBadge: confirmedResp.badge.label,
                                         isLocal: confirmedResp.badge.isLocal
                                     )
-                                    SpeechSynthesizerService.shared.speak(text: confirmedResp.speechText)
+                                    if (confirmedDecision.mode == .speakFull || confirmedDecision.mode == .speakSummaryAndHUD),
+                                       let spoken = confirmedDecision.spokenText, !spoken.isEmpty {
+                                        self.pendingAutoLeave = PendingAutoLeave(
+                                            seconds: confirmedDecision.autoLeaveSeconds,
+                                            dismissOnAppSwitch: confirmedDecision.dismissOnAppSwitch
+                                        )
+                                        SpeechSynthesizerService.shared.speak(text: spoken)
+                                    } else {
+                                        self.hudPanel.scheduleAutoLeave(
+                                            after: confirmedDecision.autoLeaveSeconds,
+                                            dismissOnAppSwitch: confirmedDecision.dismissOnAppSwitch
+                                        )
+                                    }
                                 }
                             }
                         },
                         onCancel: { [weak self] in
-                            self?.hudPanel.showPill(text: "Action cancelled", thinking: false)
+                            guard let self = self else { return }
+                            self.hudPanel.showPill(text: "Action cancelled", thinking: false)
+                            self.hudPanel.scheduleAutoLeave(after: 2.0, dismissOnAppSwitch: true)
                         }
                     )
+                    
+                    if (decision.mode == .speakFull || decision.mode == .speakSummaryAndHUD),
+                       let spoken = decision.spokenText, !spoken.isEmpty {
+                        self.pendingAutoLeave = PendingAutoLeave(
+                            seconds: decision.autoLeaveSeconds,
+                            dismissOnAppSwitch: decision.dismissOnAppSwitch
+                        )
+                        SpeechSynthesizerService.shared.speak(text: spoken)
+                    }
                 } else {
                     self.hudPanel.showPill(
-                        text: response.responseText,
+                        text: decision.hudText,
                         thinking: false,
                         tierBadge: response.badge.label,
                         isLocal: response.badge.isLocal
                     )
-                    SpeechSynthesizerService.shared.speak(text: response.speechText)
+                    
+                    if (decision.mode == .speakFull || decision.mode == .speakSummaryAndHUD),
+                       let spoken = decision.spokenText, !spoken.isEmpty {
+                        self.pendingAutoLeave = PendingAutoLeave(
+                            seconds: decision.autoLeaveSeconds,
+                            dismissOnAppSwitch: decision.dismissOnAppSwitch
+                        )
+                        SpeechSynthesizerService.shared.speak(text: spoken)
+                    } else {
+                        self.hudPanel.scheduleAutoLeave(
+                            after: decision.autoLeaveSeconds,
+                            dismissOnAppSwitch: decision.dismissOnAppSwitch
+                        )
+                    }
                 }
             }
         }
     }
     
     private func handleMemoryPressure() {
+        MLXProvider.shared.setMemoryPressure(active: true)
         hudPanel?.hidePill()
         AudioPipelineService.shared.enterStandby()
     }
@@ -284,7 +359,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
             let uptime = Int(Date().timeIntervalSince(launchDate))
             responseData["uptime_seconds"] = "\(uptime)"
             responseData["pid"] = "\(getpid())"
-            responseData["version"] = "2.1.0"
+            responseData["version"] = "3.1.0"
             
         case "status":
             let isVisible = await MainActor.run { hudPanel.isPillVisible }
@@ -328,6 +403,12 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
                     tierBadge: assistantResp.badge.label,
                     isLocal: assistantResp.badge.isLocal
                 )
+                if let decision = assistantResp.outputDecision {
+                    self.hudPanel.scheduleAutoLeave(
+                        after: decision.autoLeaveSeconds,
+                        dismissOnAppSwitch: decision.dismissOnAppSwitch
+                    )
+                }
             }
             
         case "toggle_history":
@@ -429,6 +510,63 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
                 responseMessage = "Memory operation failed: \(error.localizedDescription)"
                 isSuccess = false
             }
+            
+        case "jobs":
+            let sub = req.arguments?["subcommand"] ?? "list"
+            let jobId = req.arguments?["id"] ?? ""
+            do {
+                if sub == "resume", !jobId.isEmpty {
+                    let job = try await PlanExecutor.shared.resumeJob(id: jobId)
+                    responseMessage = "Resumed job \(String(job.id.prefix(8))): status = \(job.status.rawValue) (\(job.currentStepIndex)/\(job.steps.count) steps)"
+                } else if sub == "rollback", !jobId.isEmpty {
+                    let count = try await PlanExecutor.shared.rollbackJob(id: jobId)
+                    responseMessage = "Rolled back job \(String(jobId.prefix(8))): reverted \(count) step(s)."
+                } else {
+                    let jobs = try await JobStore.shared.listJobs()
+                    if jobs.isEmpty {
+                        responseMessage = "No plan jobs recorded."
+                    } else {
+                        let lines = jobs.prefix(15).map { j in
+                            "• [\(j.status.rawValue)] \(j.goal) (\(j.currentStepIndex)/\(j.steps.count)) [ID: \(String(j.id.prefix(8)))]"
+                        }
+                        responseMessage = "Plan Jobs (\(jobs.count)):\n" + lines.joined(separator: "\n")
+                    }
+                }
+            } catch {
+                responseMessage = "Jobs operation failed: \(error.localizedDescription)"
+                isSuccess = false
+            }
+            
+        case "approvals":
+            let sub = req.arguments?["subcommand"] ?? "list"
+            let itemId = req.arguments?["id"] ?? ""
+            do {
+                if sub == "approve", !itemId.isEmpty {
+                    let res = try await ApprovalQueue.shared.approve(id: itemId)
+                    responseMessage = "Approved & executed \(itemId): \(res.message)"
+                    isSuccess = res.success
+                } else if sub == "deny", !itemId.isEmpty {
+                    let item = try await ApprovalQueue.shared.deny(id: itemId)
+                    responseMessage = "Denied approval '\(item.toolName)' [\(item.id)]"
+                } else {
+                    let pending = await ApprovalQueue.shared.listPending()
+                    if pending.isEmpty {
+                        responseMessage = "No pending approvals."
+                    } else {
+                        let lines = pending.map { p in
+                            "• [\(p.tier)] \(p.toolName) (\(p.reason)) [ID: \(p.id)]"
+                        }
+                        responseMessage = "Pending Approvals (\(pending.count)):\n" + lines.joined(separator: "\n")
+                    }
+                }
+            } catch {
+                responseMessage = "Approvals operation failed: \(error.localizedDescription)"
+                isSuccess = false
+            }
+            
+        case "abort":
+            KillSwitch.shared.trigger(reason: "Aborted via CLI IPC")
+            responseMessage = "KillSwitch triggered: active agent execution halted."
             
         default:
             responseMessage = "Unhandled command: \(cmd)"

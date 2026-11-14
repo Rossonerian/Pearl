@@ -14,7 +14,7 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 DIST_DIR="${REPO_ROOT}/dist"
 APP_NAME="Pearl"
 BUNDLE_ID="ai.pearl.Pearl"
-VERSION="3.0.0"
+VERSION="3.1.0"
 ENTITLEMENTS="${REPO_ROOT}/App/Pearl.entitlements"
 
 # Defaults

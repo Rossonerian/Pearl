@@ -44,7 +44,33 @@ public struct PearlToolsRegistry {
             NotificationTool(),
             
             // History & Rollback
-            UndoTool()
+            UndoTool(),
+            
+            // File & Directory Operations (Allowlisted & Quarantined)
+            SearchFilesTool(),
+            ReadFileSafeTool(),
+            CopyFileTool(),
+            MoveFileTool(),
+            
+            // Window Management
+            ListWindowsTool(),
+            ManageWindowTool(),
+            
+            // Shortcuts
+            ListShortcutsTool(),
+            RunShortcutTool(),
+            
+            // Browser Operations
+            ListBrowserTabsTool(),
+            OpenURLTool(),
+            ReadActiveTabTool(),
+            
+            // Communication & Mail Drafts
+            CreateMailDraftTool(),
+            SendMailTool(),
+            
+            // Screen OCR (In-Memory)
+            ScreenReadTool()
         ]
     }
     

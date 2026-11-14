@@ -91,7 +91,7 @@ public struct SettingsView: View {
             
             Section(header: Text("Diagnostic Info")) {
                 LabeledContent("App Version:") {
-                    Text("Pearl 2.0.0 (Production Release)")
+                    Text("Pearl 3.1.0 (Production Release)")
                 }
                 LabeledContent("Host Architecture:") {
                     Text("Apple Silicon (A18 Pro / M-Series)")

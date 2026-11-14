@@ -1,6 +1,32 @@
 import Foundation
 import UserNotifications
 
+/// Represents a prioritized proactive nudge or contextual recommendation.
+public struct ProactiveNudge: Sendable, Codable, Identifiable, Equatable {
+    public let id: String
+    public let category: String
+    public let title: String
+    public let message: String
+    public let priority: TaskPriority
+    public let createdAt: Date
+    
+    public init(
+        id: String = UUID().uuidString,
+        category: String,
+        title: String,
+        message: String,
+        priority: TaskPriority,
+        createdAt: Date = Date()
+    ) {
+        self.id = id
+        self.category = category
+        self.title = title
+        self.message = message
+        self.priority = priority
+        self.createdAt = createdAt
+    }
+}
+
 /// Proactive Briefing Service for Pearl V3.
 /// Synthesizes pending high-priority tasks and delivers zero-idle-CPU event-driven notifications.
 public actor BriefingEngine {
@@ -255,5 +281,99 @@ public actor BriefingEngine {
         }
         
         return results
+    }
+    
+    // MARK: - Proactive Nudges & Quiet Hours
+    
+    /// Determines whether the given date/time falls within quiet hours.
+    /// Handles overnight wrap-around (e.g. 22:00 -> 08:00) as well as daytime intervals (e.g. 13:00 -> 15:00).
+    nonisolated public func isQuietHours(
+        at date: Date = Date(),
+        quietStartHour: Int = 22,
+        quietEndHour: Int = 8
+    ) -> Bool {
+        guard quietStartHour != quietEndHour else { return false }
+        let calendar = Calendar.current
+        let hour = calendar.component(.hour, from: date)
+        
+        if quietStartHour < quietEndHour {
+            return hour >= quietStartHour && hour < quietEndHour
+        } else {
+            return hour >= quietStartHour || hour < quietEndHour
+        }
+    }
+    
+    /// Evaluates environmental and contextual signals to produce prioritized proactive nudges.
+    /// Quiet hours suppress routine notifications, allowing only emergency critical battery warnings (< 10%).
+    public func evaluateNudges(
+        referenceDate: Date = Date(),
+        batteryPercent: Int? = nil,
+        isCharging: Bool = false,
+        nextEventTitle: String? = nil,
+        minutesToNextEvent: Int? = nil,
+        quietStartHour: Int = 22,
+        quietEndHour: Int = 8
+    ) async throws -> [ProactiveNudge] {
+        var nudges: [ProactiveNudge] = []
+        let quiet = isQuietHours(at: referenceDate, quietStartHour: quietStartHour, quietEndHour: quietEndHour)
+        
+        // Critical emergency battery (< 10% and not charging) is ALWAYS emitted, even during quiet hours
+        if let battery = batteryPercent, !isCharging, battery < 10 {
+            nudges.append(ProactiveNudge(
+                category: "battery",
+                title: "Critical Battery",
+                message: "Battery is critically low (\(battery)%). Plug in immediately.",
+                priority: .urgent,
+                createdAt: referenceDate
+            ))
+        }
+        
+        // If quiet hours are active, suppress all normal/high nudges
+        if quiet {
+            return nudges
+        }
+        
+        // Outside quiet hours, evaluate:
+        // 1. Impending meeting (starts within 15 minutes, >= 0) -> .high nudge
+        if let mins = minutesToNextEvent, mins >= 0 && mins <= 15 {
+            let title = nextEventTitle ?? "Upcoming Event"
+            let msg = mins == 0 ? "Meeting '\(title)' is starting now." : "Meeting '\(title)' starts in \(mins) minute\(mins == 1 ? "" : "s")."
+            nudges.append(ProactiveNudge(
+                category: "calendar",
+                title: "Upcoming Meeting: \(title)",
+                message: msg,
+                priority: .high,
+                createdAt: referenceDate
+            ))
+        }
+        
+        // 2. Overdue tasks -> .urgent / .high nudge summarizing overdue items
+        let overdue = try await taskStore.getOverdueTasks(asOf: referenceDate)
+        if !overdue.isEmpty {
+            let hasUrgent = overdue.contains { $0.priority == .urgent }
+            let priority: TaskPriority = hasUrgent ? .urgent : .high
+            let summary = overdue.prefix(3).map { $0.title }.joined(separator: ", ")
+            let more = overdue.count > 3 ? " and \(overdue.count - 3) more" : ""
+            nudges.append(ProactiveNudge(
+                category: "tasks",
+                title: "Overdue Tasks (\(overdue.count))",
+                message: "\(overdue.count) overdue task(s): \(summary)\(more).",
+                priority: priority,
+                createdAt: referenceDate
+            ))
+        }
+        
+        // 3. Low battery (<= 20% and not charging; < 10% already emitted above with .urgent)
+        if let battery = batteryPercent, !isCharging, battery >= 10 && battery <= 20 {
+            nudges.append(ProactiveNudge(
+                category: "battery",
+                title: "Low Battery",
+                message: "Battery level is low (\(battery)%). Connect to power soon.",
+                priority: .high,
+                createdAt: referenceDate
+            ))
+        }
+        
+        return nudges
     }
 }

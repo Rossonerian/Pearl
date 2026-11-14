@@ -161,6 +161,34 @@ public final class DeterministicRouter: Sendable {
             return ResolvedIntent(toolName: "delete_task", arguments: ["id": id], confidence: 0.98)
         }
         
+        // 10. Window Observation
+        if lower == "list windows" || lower == "show open windows" {
+            return ResolvedIntent(toolName: "list_windows", arguments: [:], confidence: 1.0)
+        }
+        
+        // 11. Screen Reading (OCR)
+        if lower == "what is on my screen" || lower == "what's on my screen" || lower == "read my screen" {
+            return ResolvedIntent(toolName: "read_screen_text", arguments: [:], confidence: 1.0)
+        }
+        
+        // 12. Shortcuts
+        if lower == "list shortcuts" || lower == "show shortcuts" {
+            return ResolvedIntent(toolName: "list_shortcuts", arguments: [:], confidence: 1.0)
+        }
+        
+        // 13. Browser Tabs
+        if lower == "list browser tabs" || lower == "show browser tabs" || lower == "what tabs are open" {
+            return ResolvedIntent(toolName: "list_browser_tabs", arguments: [:], confidence: 1.0)
+        }
+        
+        // 14. Calendar & Clipboard (for Skills & Direct Commands)
+        if lower == "list calendar events" || lower == "show calendar events" || lower == "my calendar events" || lower == "check calendar" {
+            return ResolvedIntent(toolName: "list_calendar_events", arguments: ["time_window": "today"], confidence: 1.0)
+        }
+        if lower == "read clipboard" || lower == "check clipboard" || lower == "what is in my clipboard" || lower == "what's in my clipboard" {
+            return ResolvedIntent(toolName: "read_clipboard", arguments: [:], confidence: 1.0)
+        }
+        
         return nil
     }
     
@@ -212,7 +240,9 @@ public final class DeterministicRouter: Sendable {
             "mute volume", "unmute", "volume", "battery", "is macbook charging",
             "take screenshot", "capture screen", "clean up screenshots",
             "open Safari", "open Code", "close Safari", "quit Code",
-            "git status", "git branch", "undo", "undo that", "remind me to"
+            "git status", "git branch", "undo", "undo that", "remind me to",
+            "list windows", "show open windows", "what's on my screen", "read my screen",
+            "list shortcuts", "list browser tabs"
         ]
     }
 }
