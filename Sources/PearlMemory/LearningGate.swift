@@ -22,13 +22,16 @@ public actor LearningGate {
     // MARK: - Explicit Remember with Undo Token
     
     /// Explicit "remember [fact]": writes immediately if trusted or user-confirmed.
+    /// Performs deduplication and entity fact correction.
     /// Returns the factId (undo token) and registers with UndoJournal.
     @discardableResult
     public func explicitRemember(
         fact: String,
+        category: MemoryCategory = .semantic,
         source: String = "user",
         trust: TrustLevel = .trusted,
-        userConfirmed: Bool = false
+        userConfirmed: Bool = false,
+        relatedEntityId: String? = nil
     ) async throws -> (factId: String, undoAction: @Sendable () async throws -> Void) {
         // Untrusted-content gate: ANY input tagged as untrusted is strictly REJECTED
         // unless explicitly approved by user confirmation.
@@ -43,13 +46,23 @@ public actor LearningGate {
             throw MemoryError.invalidFormat("Fact content cannot be empty")
         }
         
-        let memoryFact = MemoryFact(source: source, content: trimmed)
-        try await store.addFact(memoryFact)
+        let item = MemoryItem(
+            category: category,
+            content: trimmed,
+            source: source,
+            provenance: source,
+            confidence: 1.0,
+            sensitivity: .personal,
+            userApproved: true,
+            relatedEntityId: relatedEntityId
+        )
         
-        let factId = memoryFact.id
+        let (savedItem, _) = try await store.saveItem(item)
+        let factId = savedItem.id
         let capturedStore = self.store
+        
         let undoAction: @Sendable () async throws -> Void = {
-            _ = try await capturedStore.removeFact(id: factId)
+            _ = try await capturedStore.removeItem(id: factId)
         }
         
         await UndoJournal.shared.register(toolName: "remember", undoAction: undoAction)
@@ -59,7 +72,7 @@ public actor LearningGate {
     /// Forget a fact by its ID (undo token).
     @discardableResult
     public func forget(factId: String) async throws -> Bool {
-        return try await store.removeFact(id: factId)
+        return try await store.removeItem(id: factId)
     }
     
     // MARK: - Untrusted-Content Gate Evaluation
@@ -69,9 +82,11 @@ public actor LearningGate {
     /// unless explicitly confirmed by the user.
     public func evaluatePromotion(
         content: String,
+        category: MemoryCategory = .semantic,
         source: String,
         trust: TrustLevel = .untrusted,
-        userConfirmed: Bool = false
+        userConfirmed: Bool = false,
+        relatedEntityId: String? = nil
     ) async throws -> MemoryPromotionDecision {
         let isUntrusted = (trust == .untrusted) || (source != "user")
         
@@ -86,9 +101,18 @@ public actor LearningGate {
             return .refused(reason: "Empty content cannot be promoted.")
         }
         
-        let fact = MemoryFact(source: source, content: trimmed)
-        try await store.addFact(fact)
-        return .promoted(factId: fact.id)
+        let item = MemoryItem(
+            category: category,
+            content: trimmed,
+            source: source,
+            provenance: source,
+            confidence: 1.0,
+            sensitivity: .personal,
+            userApproved: true,
+            relatedEntityId: relatedEntityId
+        )
+        let (savedItem, _) = try await store.saveItem(item)
+        return .promoted(factId: savedItem.id)
     }
     
     // MARK: - Proposed Facts Queue (Implicit Learning)
@@ -98,9 +122,11 @@ public actor LearningGate {
     @discardableResult
     public func proposeFact(
         content: String,
+        category: MemoryCategory = .semantic,
         source: String,
         trust: TrustLevel = .trusted,
-        confidence: Double = 1.0
+        confidence: Double = 1.0,
+        relatedEntityId: String? = nil
     ) throws -> ProposedFact {
         let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
@@ -109,12 +135,14 @@ public actor LearningGate {
         
         let proposal = ProposedFact(
             id: UUID().uuidString,
+            category: category,
             content: trimmed,
             source: source,
             trust: trust,
             proposedAt: Date(),
             confidence: confidence,
-            status: .pending
+            status: .pending,
+            relatedEntityId: relatedEntityId
         )
         proposals.append(proposal)
         try saveProposals()
@@ -130,7 +158,7 @@ public actor LearningGate {
     }
     
     @discardableResult
-    public func approveProposal(id: String) async throws -> MemoryFact {
+    public func approveProposal(id: String) async throws -> MemoryItem {
         guard let index = proposals.firstIndex(where: { $0.id == id }) else {
             throw MemoryError.factNotFound(id: id)
         }
@@ -139,12 +167,22 @@ public actor LearningGate {
         }
         
         let p = proposals[index]
-        let fact = MemoryFact(id: p.id, source: p.source, content: p.content)
-        try await store.addFact(fact)
+        let item = MemoryItem(
+            id: p.id,
+            category: p.category,
+            content: p.content,
+            source: p.source,
+            provenance: p.source,
+            confidence: p.confidence,
+            sensitivity: .personal,
+            userApproved: true,
+            relatedEntityId: p.relatedEntityId
+        )
+        let (savedItem, _) = try await store.saveItem(item)
         
         proposals[index].status = .approved
         try saveProposals()
-        return fact
+        return savedItem
     }
     
     public func rejectProposal(id: String) throws {

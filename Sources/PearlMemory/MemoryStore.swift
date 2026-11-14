@@ -3,17 +3,18 @@ import PearlCore
 
 public actor MemoryStore {
     public nonisolated let baseDirectory: URL
+    public nonisolated let databaseURL: URL
+    public nonisolated var indexDatabaseURL: URL { databaseURL }
     public nonisolated let profileURL: URL
     public nonisolated let personaURL: URL
     public nonisolated let factsURL: URL
     public nonisolated let journalDirectoryURL: URL
-    public nonisolated let indexDatabaseURL: URL
     
     public private(set) var ftsIndex: FTSIndex
     
     public static let defaultBaseDirectory: URL = {
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        return appSupport.appendingPathComponent("Pearl/memory")
+        return appSupport.appendingPathComponent("Pearl")
     }()
     
     public static let defaultPersona: String = """
@@ -32,47 +33,53 @@ public actor MemoryStore {
     
     public init(baseDirectory: URL? = nil) throws {
         let dir = baseDirectory ?? Self.defaultBaseDirectory
+        let dbURL = dir.appendingPathComponent("memory.sqlite")
         let pURL = dir.appendingPathComponent("profile.md")
         let perURL = dir.appendingPathComponent("persona.md")
         let fURL = dir.appendingPathComponent("facts.md")
         let jDir = dir.appendingPathComponent("journal")
-        let idxURL = dir.appendingPathComponent("index.sqlite")
         
         self.baseDirectory = dir
+        self.databaseURL = dbURL
         self.profileURL = pURL
         self.personaURL = perURL
         self.factsURL = fURL
         self.journalDirectoryURL = jDir
-        self.indexDatabaseURL = idxURL
         
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         try FileManager.default.createDirectory(at: jDir, withIntermediateDirectories: true)
         
+        // Ensure default markdown files exist
         try Self.initializeDefaultFilesIfNeeded(personaURL: perURL, profileURL: pURL, factsURL: fURL)
         
         let initialProfile = try? String(contentsOf: pURL, encoding: .utf8)
         let initialFactsContent = (try? String(contentsOf: fURL, encoding: .utf8)) ?? ""
         let initialFacts = initialFactsContent.components(separatedBy: .newlines).compactMap { MemoryFact.parseBullet($0) }
         
-        self.ftsIndex = try FTSIndex(databaseURL: idxURL, initialFacts: initialFacts, initialProfile: initialProfile)
+        // Initialize SQLite canonical store and FTS5 index
+        self.ftsIndex = try FTSIndex(databaseURL: dbURL, initialFacts: initialFacts, initialProfile: initialProfile)
+        
+        // Run migration from ~/.pearl/ and legacy facts.md if on default system path
+        if dir == Self.defaultBaseDirectory {
+            Task { [weak self] in
+                await self?.migrateLegacyDataIfNeeded()
+            }
+        }
     }
     
     private static func initializeDefaultFilesIfNeeded(personaURL: URL, profileURL: URL, factsURL: URL) throws {
-        // Initialize persona.md if not present
         if !FileManager.default.fileExists(atPath: personaURL.path) {
             try atomicWriteStatic(content: defaultPersona, to: personaURL)
         }
         
-        // Initialize profile.md if not present
         if !FileManager.default.fileExists(atPath: profileURL.path) {
             try atomicWriteStatic(content: defaultProfile, to: profileURL)
         }
         
-        // Initialize facts.md if not present
         if !FileManager.default.fileExists(atPath: factsURL.path) {
             let header = """
             # Pearl Facts
-            <!-- Stored facts with provenance. One bullet per fact: - [id: ID] (source, YYYY-MM-DD): content -->
+            <!-- Stored facts with provenance. One bullet per fact: - [id: ID] (source, YYYY-MM-DD) [category: category]: content -->
             
             """
             try atomicWriteStatic(content: header, to: factsURL)
@@ -81,7 +88,22 @@ public actor MemoryStore {
     
     // MARK: - Profile Management (Hard Token & Byte Budget)
     
-    public func getProfile() -> String {
+    public func getProfile() async -> String {
+        // Read from canonical SQLite store first
+        let profileItems = await ftsIndex.getAllItems(category: .profile)
+        if !profileItems.isEmpty {
+            // Check if there is a main profile document or formatted bullets
+            if let main = profileItems.first(where: { $0.id == "profile_main" }) {
+                return main.content
+            }
+            // Otherwise generate markdown representation
+            var lines = ["# User Profile", "<!-- Stated facts about user preferences, name, and environment. Hard budget <= 1.5 KB / 600 tokens -->", ""]
+            for item in profileItems {
+                lines.append("- \(item.content)")
+            }
+            return lines.joined(separator: "\n")
+        }
+        
         return (try? String(contentsOf: profileURL, encoding: .utf8)) ?? ""
     }
     
@@ -93,16 +115,21 @@ public actor MemoryStore {
             throw MemoryError.profileExceedsBudget(bytes: byteCount, tokens: tokenCount)
         }
         
-        try atomicWrite(content: content, to: profileURL)
-        
-        // Update profile in FTS index
-        try await ftsIndex.insert(
+        // Write to canonical SQLite store
+        let item = MemoryItem(
             id: "profile_main",
-            sourceType: "profile",
-            filePath: "profile.md",
-            date: MemoryFact.currentDateString(),
-            content: content
+            category: .profile,
+            content: content,
+            source: "user",
+            provenance: "profile.md",
+            confidence: 1.0,
+            sensitivity: .personal,
+            userApproved: true
         )
+        _ = try await ftsIndex.upsert(item: item)
+        
+        // Sync to inspectable markdown
+        try atomicWrite(content: content, to: profileURL)
     }
     
     // MARK: - Persona Management (Strictly Read-Only for Tools)
@@ -111,86 +138,366 @@ public actor MemoryStore {
         return (try? String(contentsOf: personaURL, encoding: .utf8)) ?? Self.defaultPersona
     }
     
-    /// Strictly throws MemoryError.personaReadOnly: system assistant persona is immutable by tools or runtime agents.
     public func updatePersona(_ content: String) throws {
         throw MemoryError.personaReadOnly("persona.md is system-defined and strictly read-only for tools and runtime modifications.")
     }
     
-    // MARK: - Facts Management
+    // MARK: - Structured Memory Item Operations (The 6 Classes)
     
-    public func getAllFacts() -> [MemoryFact] {
+    public func getAllItems(category: MemoryCategory? = nil) async -> [MemoryItem] {
+        return await ftsIndex.getAllItems(category: category)
+    }
+    
+    public func getItem(id: String) async -> MemoryItem? {
+        return await ftsIndex.getItem(id: id)
+    }
+    
+    @discardableResult
+    public func saveItem(_ item: MemoryItem) async throws -> (item: MemoryItem, wasCorrected: Bool) {
+        let result = try await ftsIndex.saveOrCorrect(item: item)
+        try await exportToMarkdown()
+        return result
+    }
+    
+    @discardableResult
+    public func removeItem(id: String) async throws -> Bool {
+        let exists = await ftsIndex.getItem(id: id) != nil
+        if exists {
+            try await ftsIndex.delete(id: id)
+            try await exportToMarkdown()
+            return true
+        }
+        return false
+    }
+    
+    // MARK: - Backwards-Compatible Facts Management
+    
+    public func getAllFacts() async -> [MemoryFact] {
+        let items = await ftsIndex.getAllItems(category: nil)
+        let facts = items.filter { $0.category != .profile && $0.id != "profile_main" }.map { $0.asMemoryFact }
+        if !facts.isEmpty {
+            return facts
+        }
         guard let content = try? String(contentsOf: factsURL, encoding: .utf8) else {
             return []
         }
-        
-        var facts: [MemoryFact] = []
-        let lines = content.components(separatedBy: .newlines)
-        for line in lines {
-            if let fact = MemoryFact.parseBullet(line) {
-                facts.append(fact)
-            }
-        }
-        return facts
+        return content.components(separatedBy: .newlines).compactMap { MemoryFact.parseBullet($0) }
     }
     
-    public func getFact(id: String) -> MemoryFact? {
-        return getAllFacts().first { $0.id == id }
+    public func getFact(id: String) async -> MemoryFact? {
+        if let fact = await ftsIndex.getItem(id: id)?.asMemoryFact {
+            return fact
+        }
+        return await getAllFacts().first { $0.id == id }
     }
     
     public func addFact(_ fact: MemoryFact) async throws {
-        var existing = getAllFacts()
-        // If fact already exists with same ID, replace it; otherwise append
-        if let idx = existing.firstIndex(where: { $0.id == fact.id }) {
-            existing[idx] = fact
-        } else {
-            existing.append(fact)
-        }
-        
-        try writeFactsFile(existing)
-        
-        // Index into FTS5
-        try await ftsIndex.insert(
-            id: fact.id,
-            sourceType: "fact",
-            filePath: "facts.md",
-            date: fact.date,
-            content: fact.content
-        )
+        _ = try await saveItem(fact.asMemoryItem)
     }
     
     public func removeFact(id: String) async throws -> Bool {
-        var existing = getAllFacts()
-        guard let idx = existing.firstIndex(where: { $0.id == id }) else {
-            return false
-        }
-        
-        existing.remove(at: idx)
-        try writeFactsFile(existing)
-        
-        // Remove from FTS5
-        try await ftsIndex.delete(id: id)
-        return true
+        return try await removeItem(id: id)
     }
     
     public func clearAllFacts() async throws {
-        try writeFactsFile([])
-        try await ftsIndex.rebuild(facts: [], profile: getProfile())
+        let allItems = await ftsIndex.getAllItems()
+        for item in allItems where item.category != .profile && item.id != "profile_main" {
+            try await ftsIndex.delete(id: item.id)
+        }
+        try await exportToMarkdown()
     }
     
-    private func writeFactsFile(_ facts: [MemoryFact]) throws {
+    // MARK: - Bidirectional Sync with Markdown (Requirement 5)
+    
+    /// Exports canonical SQLite data to inspectable `profile.md` and `facts.md`.
+    public func exportToMarkdown() async throws {
+        // 1. Export profile.md
+        let profileContent = await getProfile()
+        if !profileContent.isEmpty {
+            try atomicWrite(content: profileContent, to: profileURL)
+        }
+        
+        // 2. Export facts.md grouped by the 6 memory classes
+        let items = await ftsIndex.getAllItems()
+        let nonProfileItems = items.filter { $0.category != .profile && $0.id != "profile_main" }
+        
         var lines: [String] = [
             "# Pearl Facts",
-            "<!-- Stored facts with provenance. One bullet per fact: - [id: ID] (source, YYYY-MM-DD): content -->",
+            "<!-- Stored facts with provenance. One bullet per fact: - [id: ID] (source, YYYY-MM-DD) [category: category]: content -->",
             ""
         ]
         
-        for fact in facts {
-            lines.append(fact.toMarkdownBullet())
+        let categories: [(MemoryCategory, String)] = [
+            (.semantic, "### Semantic Memory"),
+            (.project, "### Project Memory"),
+            (.episodic, "### Episodic Memory"),
+            (.task, "### Tasks & Commitments"),
+            (.working, "### Working Memory")
+        ]
+        
+        for (cat, header) in categories {
+            let catItems = nonProfileItems.filter { $0.category == cat }
+            if !catItems.isEmpty {
+                lines.append(header)
+                for item in catItems {
+                    lines.append(item.toMarkdownBullet())
+                }
+                lines.append("")
+            }
         }
-        lines.append("")
+        
+        // If there are legacy items with no specific group
+        let groupedIds = Set(categories.flatMap { cat, _ in nonProfileItems.filter { $0.category == cat }.map(\.id) })
+        let remaining = nonProfileItems.filter { !groupedIds.contains($0.id) }
+        if !remaining.isEmpty {
+            lines.append("### General Facts")
+            for item in remaining {
+                lines.append(item.toMarkdownBullet())
+            }
+            lines.append("")
+        }
         
         let output = lines.joined(separator: "\n")
         try atomicWrite(content: output, to: factsURL)
+    }
+    
+    /// Syncs human edits from `facts.md` and `profile.md` into canonical SQLite store.
+    public func syncFromMarkdown() async throws {
+        // 1. Sync profile.md if modified
+        if let diskProfile = try? String(contentsOf: profileURL, encoding: .utf8), !diskProfile.isEmpty {
+            let currentProfile = await getProfile()
+            if diskProfile != currentProfile {
+                try await setProfile(diskProfile)
+            }
+        }
+        
+        // 2. Sync facts.md
+        guard let content = try? String(contentsOf: factsURL, encoding: .utf8) else { return }
+        let lines = content.components(separatedBy: .newlines)
+        
+        for line in lines {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            guard trimmed.hasPrefix("- ") || trimmed.hasPrefix("* ") else { continue }
+            
+            if let item = MemoryItem.parseBullet(line) {
+                _ = try await ftsIndex.saveOrCorrect(item: item)
+            } else if trimmed.count > 3 {
+                // Freeform bullet added by user: assign UUID and insert
+                let cleanContent = String(trimmed.dropFirst(2)).trimmingCharacters(in: .whitespaces)
+                let newItem = MemoryItem(
+                    id: UUID().uuidString,
+                    category: .semantic,
+                    content: cleanContent,
+                    source: "user",
+                    provenance: "facts.md",
+                    confidence: 1.0,
+                    sensitivity: .personal,
+                    userApproved: true
+                )
+                _ = try await ftsIndex.saveOrCorrect(item: newItem)
+            }
+        }
+    }
+    
+    // MARK: - Legacy Data Migration (Requirement 6)
+    
+    public func migrateLegacyDataIfNeeded() async {
+        guard baseDirectory == Self.defaultBaseDirectory else {
+            return
+        }
+        
+        let markerURL = baseDirectory.appendingPathComponent(".migration_v3_complete")
+        if FileManager.default.fileExists(atPath: markerURL.path) {
+            return
+        }
+        
+        do {
+            try await performMigration()
+            try? "".write(to: markerURL, atomically: true, encoding: .utf8)
+        } catch {
+            NSLog("[PearlMemory] Migration notice: %@", error.localizedDescription)
+        }
+    }
+    
+    public func performMigration() async throws {
+        // 1. Migrate legacy ~/Library/Application Support/Pearl/memory/facts.md
+        let legacyMemoryDir = baseDirectory.appendingPathComponent("memory")
+        let legacyFactsURL = legacyMemoryDir.appendingPathComponent("facts.md")
+        if FileManager.default.fileExists(atPath: legacyFactsURL.path) {
+            if let content = try? String(contentsOf: legacyFactsURL, encoding: .utf8) {
+                for line in content.components(separatedBy: .newlines) {
+                    if let item = MemoryItem.parseBullet(line) {
+                        _ = try await ftsIndex.saveOrCorrect(item: item)
+                    } else if let fact = MemoryFact.parseBullet(line) {
+                        _ = try await ftsIndex.saveOrCorrect(item: fact.asMemoryItem)
+                    }
+                }
+            }
+        }
+        
+        // 2. Migrate ~/.pearl/ directory
+        let homeDir = FileManager.default.homeDirectoryForCurrentUser
+        let dotPearlDir = homeDir.appendingPathComponent(".pearl")
+        
+        if FileManager.default.fileExists(atPath: dotPearlDir.path) {
+            // 2.1 USER_PROFILE.md -> Profile & Project memories
+            let userProfileURL = dotPearlDir.appendingPathComponent("USER_PROFILE.md")
+            if let profileText = try? String(contentsOf: userProfileURL, encoding: .utf8) {
+                try await migrateUserProfileMarkdown(profileText)
+            }
+            
+            // 2.2 diary.md -> Episodic memories
+            let diaryURL = dotPearlDir.appendingPathComponent("diary.md")
+            if let diaryText = try? String(contentsOf: diaryURL, encoding: .utf8) {
+                try await migrateDiaryMarkdown(diaryText)
+            }
+            
+            // 2.3 scratchpad.md -> Task & Working memories
+            let scratchpadURL = dotPearlDir.appendingPathComponent("scratchpad.md")
+            if let scratchText = try? String(contentsOf: scratchpadURL, encoding: .utf8) {
+                try await migrateScratchpadMarkdown(scratchText)
+            }
+            
+            // 2.4 timeline.md -> Episodic & Profile rule memories
+            let timelineURL = dotPearlDir.appendingPathComponent("timeline.md")
+            if let timelineText = try? String(contentsOf: timelineURL, encoding: .utf8) {
+                try await migrateTimelineMarkdown(timelineText)
+            }
+        }
+        
+        // Export complete migrated data to inspectable Markdown
+        try await exportToMarkdown()
+    }
+    
+    private func migrateUserProfileMarkdown(_ text: String) async throws {
+        let lines = text.components(separatedBy: .newlines)
+        var currentSection = ""
+        
+        for rawLine in lines {
+            let line = rawLine.trimmingCharacters(in: .whitespaces)
+            if line.hasPrefix("## ") {
+                currentSection = String(line.dropFirst(3)).lowercased()
+                continue
+            }
+            
+            guard line.hasPrefix("- ") || line.hasPrefix("* ") else { continue }
+            let bullet = String(line.dropFirst(2)).trimmingCharacters(in: .whitespaces)
+            guard !bullet.isEmpty else { continue }
+            
+            if currentSection.contains("project") || currentSection.contains("workspace") {
+                // Project memory
+                let item = MemoryItem(
+                    category: .project,
+                    content: bullet,
+                    source: "system",
+                    provenance: "~/.pearl/USER_PROFILE.md",
+                    confidence: 1.0,
+                    sensitivity: .personal,
+                    userApproved: true,
+                    relatedEntityId: "project:\(bullet.prefix(20).description)"
+                )
+                _ = try await ftsIndex.saveOrCorrect(item: item)
+            } else {
+                // Profile memory
+                let item = MemoryItem(
+                    category: .profile,
+                    content: bullet,
+                    source: "user",
+                    provenance: "~/.pearl/USER_PROFILE.md",
+                    confidence: 1.0,
+                    sensitivity: .personal,
+                    userApproved: true
+                )
+                _ = try await ftsIndex.saveOrCorrect(item: item)
+            }
+        }
+    }
+    
+    private func migrateDiaryMarkdown(_ text: String) async throws {
+        let sections = text.components(separatedBy: "## ")
+        for sec in sections {
+            let trimmed = sec.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty && !trimmed.hasPrefix("# ") else { continue }
+            
+            let lines = trimmed.components(separatedBy: .newlines)
+            let header = lines.first ?? ""
+            let body = lines.dropFirst().joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !body.isEmpty else { continue }
+            
+            let entryContent = "[\(header)] \(body)"
+            let item = MemoryItem(
+                category: .episodic,
+                content: entryContent,
+                source: "observation",
+                provenance: "~/.pearl/diary.md",
+                confidence: 1.0,
+                sensitivity: .personal,
+                userApproved: true
+            )
+            _ = try await ftsIndex.saveOrCorrect(item: item)
+        }
+    }
+    
+    private func migrateScratchpadMarkdown(_ text: String) async throws {
+        let lines = text.components(separatedBy: .newlines)
+        for rawLine in lines {
+            let line = rawLine.trimmingCharacters(in: .whitespaces)
+            guard line.hasPrefix("- ") || line.hasPrefix("* ") else { continue }
+            let content = String(line.dropFirst(2)).trimmingCharacters(in: .whitespaces)
+            guard !content.isEmpty else { continue }
+            
+            let lower = content.lowercased()
+            let isTask = lower.contains("standup") || lower.contains("review") ||
+                         lower.contains("tomorrow") || lower.contains("deadline") ||
+                         lower.contains("appointment") || lower.contains("call")
+            
+            let category: MemoryCategory = isTask ? .task : .working
+            let item = MemoryItem(
+                category: category,
+                content: content,
+                source: "user",
+                provenance: "~/.pearl/scratchpad.md",
+                confidence: 1.0,
+                sensitivity: .personal,
+                userApproved: true
+            )
+            _ = try await ftsIndex.saveOrCorrect(item: item)
+        }
+    }
+    
+    private func migrateTimelineMarkdown(_ text: String) async throws {
+        let lines = text.components(separatedBy: .newlines)
+        for rawLine in lines {
+            let line = rawLine.trimmingCharacters(in: .whitespaces)
+            guard line.hasPrefix("- ") || line.hasPrefix("* ") else { continue }
+            let content = String(line.dropFirst(2)).trimmingCharacters(in: .whitespaces)
+            guard !content.isEmpty else { continue }
+            
+            if content.lowercased().contains("learned rule:") {
+                let rule = content.components(separatedBy: "Learned rule:").last?.trimmingCharacters(in: .whitespaces) ?? content
+                let item = MemoryItem(
+                    category: .profile,
+                    content: rule,
+                    source: "user",
+                    provenance: "~/.pearl/timeline.md",
+                    confidence: 1.0,
+                    sensitivity: .personal,
+                    userApproved: true
+                )
+                _ = try await ftsIndex.saveOrCorrect(item: item)
+            } else {
+                let item = MemoryItem(
+                    category: .episodic,
+                    content: content,
+                    source: "observation",
+                    provenance: "~/.pearl/timeline.md",
+                    confidence: 1.0,
+                    sensitivity: .personal,
+                    userApproved: true
+                )
+                _ = try await ftsIndex.saveOrCorrect(item: item)
+            }
+        }
     }
     
     // MARK: - Journal Management (Scratch Notes, Never Auto-Injected)
@@ -234,18 +541,19 @@ public actor MemoryStore {
         return files.filter { $0.hasSuffix(".md") }.map { String($0.dropLast(3)) }.sorted()
     }
     
-    // MARK: - Retrieval and Search
+    // MARK: - Retrieval and Search (Ranked BM25 across categories)
     
-    public func search(query: String, topK: Int = 5) async -> [MemorySnippet] {
-        return await ftsIndex.search(query: query, topK: min(topK, ContextBudget.maxRetrievedSnippets))
+    public func search(query: String, category: MemoryCategory? = nil, topK: Int = 5) async -> [MemorySnippet] {
+        return await ftsIndex.search(query: query, category: category, topK: min(topK, ContextBudget.maxRetrievedSnippets))
     }
     
-    // MARK: - Rebuild & Migration
+    // MARK: - Rebuild
     
     public func rebuild() async throws {
-        let facts = getAllFacts()
-        let profile = getProfile()
+        let facts = await getAllFacts()
+        let profile = await getProfile()
         try await ftsIndex.rebuild(facts: facts, profile: profile)
+        try await exportToMarkdown()
     }
     
     // MARK: - Atomic File Writes

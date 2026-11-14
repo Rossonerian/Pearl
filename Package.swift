@@ -53,6 +53,11 @@ let package = Package(
             name: "PearlCLI",
             dependencies: ["PearlCore", "PearlTools", "PearlVoice", "PearlMemory", "PearlMCP"],
             path: "Sources/pearl-cli"
+        ),
+        .testTarget(
+            name: "PearlMemoryTests",
+            dependencies: ["PearlMemory", "PearlCore"],
+            path: "Tests/PearlMemoryTests"
         )
     ]
 )
