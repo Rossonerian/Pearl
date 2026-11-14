@@ -1,25 +1,59 @@
-# Pearl (v2.0)
+# Pearl (v3.0.0)
 
-> Ultra-low-latency, voice-first macOS assistant built natively in Swift for Apple Silicon.
+> Capable, private, lightweight native macOS personal AI assistant built in compiled Swift for Apple Silicon.
 
 [![Platform](https://img.shields.io/badge/platform-macOS%2015.0%2B-blue.svg)](https://apple.com/macos)
 [![Architecture](https://img.shields.io/badge/arch-Apple%20Silicon%20(A18%20Pro%20%2F%20M--Series)-orange.svg)](https://apple.com)
 [![License](https://img.shields.io/badge/license-MIT%20%2F%20Apache--2.0-green.svg)](LICENSE)
 [![Zero Telemetry](https://img.shields.io/badge/telemetry-0%20call%20home-brightgreen.svg)](PRIVACY.md)
 [![MCP Compliant](https://img.shields.io/badge/MCP-2024--11--05-purple.svg)](docs/MCP.md)
+[![Tests](https://img.shields.io/badge/tests-96%2F96%20passed%20(100%25)-brightgreen.svg)](Tests/)
 
 ---
 
 ## Overview
 
-Pearl is a local-first, native macOS assistant designed for Apple Silicon. Built in compiled Swift, Pearl replaces fragile shell scripts and sluggish AppleScript processes with direct in-process AppKit, CoreAudio, and IOKit system calls. It presents a lightweight floating pill beneath the MacBook notch, supports instant push-to-talk voice commands, exposes its capabilities over Model Context Protocol (MCP), and operates with **zero telemetry** and **zero TCP network listeners**.
+Pearl V3 is a local-first, native macOS personal AI assistant engineered specifically for Apple Silicon (optimized for MacBook Neo, A18 Pro, and M-Series Macs with 8 GB unified memory). Built in compiled Swift, Pearl replaces heavyweight Electron shells and Python daemons with direct in-process AppKit, CoreAudio, EventKit, SQLite, and IOKit system calls.
 
-### Assistant Philosophy
+It presents an ultra-responsive floating pill HUD beneath the display notch, supports push-to-talk voice commands, multi-turn conversational reasoning with anaphoric reference resolution ("open Safari" $\rightarrow$ "now close it"), inspectable 6-class personal memory, typed task management, event-driven proactivity, and Model Context Protocol (MCP) tool exposure—all operating with **zero telemetry**, **zero background LLM daemons**, and **zero TCP network listeners**.
 
-- **Zero Companion Persona**: Pearl is warm, concise, and focused strictly on task execution. It does not roleplay, simulate emotional dependency, or waste your time with conversational fluff.
-- **Local-First & Private**: Direct on-device intelligence via Apple Foundation Models or local open-weights (MLX/Ollama). When using cloud providers, queries flow directly to your BYO endpoint using encrypted Keychain credentials.
-- **Hardened Safety Boundaries**: Dual-layer Seatbelt sandbox, in-process taint tracking, and a tamper-evident audit hash chain prevent unauthorized side effects.
-- **Radical Transparency**: All memory is stored locally in human-readable Markdown files. You can inspect, export, or permanently wipe your data with one click.
+---
+
+## What's New in Pearl V3
+
+1. **Structured 6-Class Memory Architecture (`memory.sqlite`)**:
+   - Structured SQLite canonical store (`~/Library/Application Support/Pearl/memory.sqlite`) supporting 6 distinct memory classes: Profile, Semantic, Project, Episodic, Working, and Task.
+   - Ranked BM25 search via SQLite FTS5 with Porter tokenization ($p95 = 2.24\text{ ms}$ across 5,000 facts).
+   - Automatic fact deduplication and entity-level fact correction.
+   - Bidirectional human-readable Markdown synchronization (`facts.md`, `profile.md`).
+
+2. **Multi-Turn Conversation & Contextual Intelligence**:
+   - `SessionManager` maintaining bounded turn history under strict token budgets.
+   - `ContextReferenceResolver` resolving anaphoric pronoun references ("close it", "check that branch", "do it again") across consecutive turns.
+   - `StreamingResponseChunker` streaming typing cadence for live HUD response rendering.
+
+3. **Native macOS System Capabilities (`Sources/PearlTools/`)**:
+   - **Calendar (`EventKit`)**: Query events (`list_calendar_events`), check schedule availability (`check_calendar_availability`), create events with instant `UndoJournal` rollback (`create_calendar_event`), and delete events with user confirmation (`delete_calendar_event`).
+   - **Display Context**: Inspect active display resolution, Retina backing scale, color appearance, and nominal 60 Hz refresh rate.
+   - **Clipboard & Secret Redaction**: Read and write clipboard content with automatic redaction of API keys/tokens and undo restoration.
+   - **System Notifications**: Post native desktop notifications with zero third-party dependencies.
+
+4. **Consolidated Audio & Native 60 Hz HUD UI**:
+   - Unified `AudioPipelineService` owning a single `AVAudioEngine` tap for 60 Hz RMS metering, barge-in detection, and real-time speech recognition.
+   - Standby resource deallocation tearing down audio graphs on idle to guarantee physical memory footprint $\le 30\text{ MB}$.
+   - Expandable HUD conversation history sheet with SF Mono tabular timestamps.
+   - Interactive Tier 2 tool confirmation banner (`[Confirm (Enter)]` / `[Cancel (Esc)]`) embedded directly inside the floating notch capsule.
+
+5. **Local Task Engine & Proactive Briefing**:
+   - Structured `TaskStore.sqlite` with priority sorting, status tracking, and deadline filtering.
+   - Typed task management tools with undo support (`list_tasks`, `create_task`, `complete_task`, `delete_task`).
+   - Executive morning daily briefing and zero-polling event-driven deadline notifications.
+
+6. **Hardened Safety & Formal Quality Suite**:
+   - 100.00% deterministic routing accuracy on 851 golden utterances (0 wrong actions, 0 false triggers on negations).
+   - 100% malicious shell command interception (220/220) and prompt injection rejection (110/110).
+   - 96 / 96 unit tests passing across `PearlCoreTests`, `PearlMemoryTests`, and `PearlToolsTests`.
+   - Comprehensive GitHub Actions CI runner (`.github/workflows/ci.yml`).
 
 ---
 

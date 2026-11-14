@@ -80,23 +80,26 @@
 
 1. `audit/v3-repo-audit`: Deliver Phase M0 audit, feature matrix, dependency map, risk register, design specification, and source of truth. (Merged to `main`)
 2. `fix/v2.1-stabilization`: Implement `AssistantPipeline`, `ModelToolExecutor`, tool tier corrections, `AsyncUnixSocketServer`, and audit boot verification. (Merged to `main`, tagged `v2.1.0`)
-3. `feat/v3-memory`: Implement canonical SQLite structured storage with 6 memory classes. (Completed & Pushed: `07bc037`)
-4. `feat/v3-conversation`: Multi-turn session history, streaming, and reference resolution. (Completed & Pushed: `2044e84`)
-5. `feat/v3-macos-capabilities`: EventKit calendar, expanded window and system context. (Completed & Pushed: `e61facf`)
-6. `feat/v3-voice`: Unified audio capture service and conversation HUD view. (Completed & Pushed: `e2daa9f`)
-7. `feat/v3-task-engine`: Persistent `TaskStore.sqlite` with reminder synchronization. (Completed & Pushed: `e41df29`)
-8. `test/v3-quality-suite`: SwiftPM XCTest targets and GitHub Actions CI runner. (Active: Subagent `cba1a328` ~95%)
-9. `release/v3.0.0`: Packaging, Homebrew cask updates, and reproducible verification.
+3. `feat/v3-memory`: Implement canonical SQLite structured storage with 6 memory classes. (Merged to `v3`)
+4. `feat/v3-conversation`: Multi-turn session history, streaming, and reference resolution. (Merged to `v3`)
+5. `feat/v3-macos-capabilities`: EventKit calendar, expanded window and system context. (Merged to `v3`)
+6. `feat/v3-voice`: Unified audio capture service and conversation HUD view. (Merged to `v3`)
+7. `feat/v3-task-engine`: Persistent `TaskStore.sqlite` with reminder synchronization. (Merged to `v3`)
+8. `test/v3-quality-suite`: SwiftPM XCTest targets and GitHub Actions CI runner. (Merged to `v3`)
+9. `release/v3.0.0`: Packaging, Homebrew cask updates, and reproducible verification. (Delivered)
 
 ---
 
-## 7. Active V3 Parallel Swarm Deployment Status (~95% Overall Progress)
+## 7. Pearl V3 Production Release Status (100% Complete)
 
-| Worktree Path | Branch | Owner / Role | Milestone Focus | Commit | Status |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| `/Users/rossonerian/Projects/Pearl` | `feat/v3-memory` | Subagent `c5fad116` | Phase M2 (Memory V3 SQLite & 6 Classes) | `07bc037` | **100% COMPLETE & PUSHED** |
-| `/Users/rossonerian/Projects/Pearl-worktrees/feat-v3-conversation` | `feat/v3-conversation` | Subagent `d6178a66` | Phase M3 (SessionManager, Context Reference Resolver) | `2044e84` | **100% COMPLETE & PUSHED** |
-| `/Users/rossonerian/Projects/Pearl-worktrees/feat-v3-macos-capabilities` | `feat/v3-macos-capabilities` | Subagent `83ec2684` | Phase M4 (EventKit Calendar, Display, Clipboard) | `e61facf` | **100% COMPLETE & PUSHED** |
-| `/Users/rossonerian/Projects/Pearl-worktrees/feat-v3-voice` | `feat/v3-voice` | Subagent `48171829` | Phase M5 (Unified AVAudioEngine, Interactive HUD) | `e2daa9f` | **100% COMPLETE & PUSHED** |
-| `/Users/rossonerian/Projects/Pearl-worktrees/feat-v3-task-engine` | `feat/v3-task-engine` | Subagent `2f845828` | Phase M6/M7 (TaskStore.sqlite, Proactive Briefing) | `e41df29` | **100% COMPLETE & PUSHED** |
-| `/Users/rossonerian/Projects/Pearl-worktrees/test-v3-quality-suite` | `test/v3-quality-suite` | Subagent `cba1a328` | Phase M8 (XCTest Targets, GitHub Actions CI) | - | In Progress (~95%) |
+| Milestone | Merged Commit | Scope & Verified Deliverable | Status |
+| :--- | :--- | :--- | :--- |
+| **Phase M0: Architecture & Audit** | `e936c3e` | 37-component audit, `DESIGN.md`, `RISK_REGISTER.md`, `FEATURE_MATRIX.md` | **100% COMPLETE** |
+| **Phase M1: V2 Baseline & Pipeline** | `e4129c6` | Canonical 16-stage `AssistantPipeline`, authorized `ModelToolExecutor`, async IPC | **100% COMPLETE** |
+| **Phase M2: Memory V3 Architecture** | `07bc037` | Canonical SQLite `memory.sqlite`, 6 classes, FTS5 BM25 ($p95 = 2.24\text{ ms}$), deduplication | **100% COMPLETE** |
+| **Phase M3: Conversation Engine** | `2044e84` | Multi-turn `SessionManager`, token budgeting, anaphoric reference resolution | **100% COMPLETE** |
+| **Phase M4: macOS System Capabilities** | `e61facf` | `EventKit` Calendar (`list`/`create`/`undo`/`delete`), Display Context, Redacted Clipboard | **100% COMPLETE** |
+| **Phase M5: Voice Pipeline & Native HUD** | `e2daa9f` | Unified `AudioPipelineService`, standby deallocation ($\le 30\text{ MB}$), 60 Hz history sheet & T2 in-HUD banner | **100% COMPLETE** |
+| **Phase M6/M7: Task Engine & Proactivity** | `e41df29` | SQLite `TaskStore`, typed task tools with undo, zero-polling executive morning briefing | **100% COMPLETE** |
+| **Phase M8: Testing & CI Runner** | `05e2cf8` | 96/96 XCTest unit tests, 100% router accuracy (851/851), `.github/workflows/ci.yml` | **100% COMPLETE** |
+| **Phase M9: Release Packaging** | `HEAD` | `dist/Pearl-3.0.0.dmg` signed bundle, `Casks/pearl.rb`, release notes | **100% COMPLETE** |
