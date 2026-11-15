@@ -23,7 +23,7 @@ public final class StatusItemController: NSObject, NSMenuDelegate {
         let menu = NSMenu()
         menu.delegate = self
         
-        let titleItem = NSMenuItem(title: "Pearl 3.2.0", action: nil, keyEquivalent: "")
+        let titleItem = NSMenuItem(title: "Pearl 3.3.0", action: nil, keyEquivalent: "")
         titleItem.isEnabled = false
         titleItem.image = NSImage(systemSymbolName: "waveform", accessibilityDescription: nil)
         menu.addItem(titleItem)

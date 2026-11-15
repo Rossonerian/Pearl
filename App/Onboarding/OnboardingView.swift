@@ -19,10 +19,11 @@ public final class OnboardingViewModel {
     public init() {}
 }
 
-/// SwiftUI Onboarding Flow for Pearl 3.2.0.
+/// SwiftUI Onboarding Flow for Pearl 3.3.0.
 /// Guides the user through choosing an execution brain, hotkey setup,
 /// TCC permissions, and verifies zero default personal data collection.
 public struct OnboardingView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     public var state = OnboardingViewModel()
     public var onFinish: (() -> Void)?
     
@@ -65,8 +66,9 @@ public struct OnboardingView: View {
                     .resizable()
                     .frame(width: 32, height: 32)
                     .foregroundColor(.accentColor)
+                    .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Welcome to Pearl")
+                    Text("Welcome to Pearl 3.3.0")
                         .font(.title2)
                         .fontWeight(.bold)
                     Text("Ultra-low-latency macOS voice assistant for Apple Silicon")
@@ -109,7 +111,7 @@ public struct OnboardingView: View {
             HStack {
                 if state.currentStep > 0 {
                     Button("Back") {
-                        withAnimation { state.currentStep -= 1 }
+                        navigateStep(-1)
                     }
                     .keyboardShortcut("[", modifiers: .command)
                 }
@@ -118,7 +120,7 @@ public struct OnboardingView: View {
                 
                 if state.currentStep < 3 {
                     Button("Continue") {
-                        withAnimation { state.currentStep += 1 }
+                        navigateStep(1)
                     }
                     .keyboardShortcut(.defaultAction)
                     .buttonStyle(.borderedProminent)
@@ -156,36 +158,43 @@ public struct OnboardingView: View {
                 .font(.headline)
             
             ForEach(BrainChoice.allCases) { choice in
-                HStack(alignment: .top, spacing: 12) {
-                    Image(systemName: state.selectedBrain == choice ? "largecircle.fill.circle" : "circle")
-                        .foregroundColor(state.selectedBrain == choice ? .accentColor : .secondary)
-                        .padding(.top, 2)
-                    
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack {
-                            Text(choice.rawValue)
-                                .fontWeight(.medium)
-                            Spacer()
-                            Text(choice.badge)
-                                .font(.caption2)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(Color.accentColor.opacity(0.15))
-                                .foregroundColor(.accentColor)
-                                .cornerRadius(4)
-                        }
-                        Text(choice.description)
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                }
-                .padding(10)
-                .background(state.selectedBrain == choice ? Color.accentColor.opacity(0.08) : Color.clear)
-                .cornerRadius(8)
-                .contentShape(Rectangle())
-                .onTapGesture {
+                Button {
                     state.selectedBrain = choice
+                } label: {
+                    HStack(alignment: .top, spacing: 12) {
+                        Image(systemName: state.selectedBrain == choice ? "largecircle.fill.circle" : "circle")
+                            .foregroundColor(state.selectedBrain == choice ? .accentColor : .secondary)
+                            .padding(.top, 2)
+                            .accessibilityHidden(true)
+                        
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack {
+                                Text(choice.rawValue)
+                                    .fontWeight(.medium)
+                                Spacer()
+                                Text(choice.badge)
+                                    .font(.caption2)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(Color.accentColor.opacity(0.15))
+                                    .foregroundColor(.accentColor)
+                                    .cornerRadius(4)
+                            }
+                            Text(choice.description)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    .padding(10)
+                    .background(state.selectedBrain == choice ? Color.accentColor.opacity(0.08) : Color.clear)
+                    .cornerRadius(8)
+                    .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("\(choice.rawValue), \(choice.badge)")
+                .accessibilityHint(choice.description)
+                .accessibilityAddTraits(state.selectedBrain == choice ? [.isSelected] : [])
             }
             
             if state.selectedBrain == .cloudBYO {
@@ -339,10 +348,22 @@ public struct OnboardingView: View {
     }
     
     // MARK: - Helpers
+    private func navigateStep(_ delta: Int) {
+        let target = max(0, min(3, state.currentStep + delta))
+        if reduceMotion {
+            state.currentStep = target
+        } else {
+            withAnimation(.easeInOut(duration: 0.18)) {
+                state.currentStep = target
+            }
+        }
+    }
+
     private func permissionRow(name: String, description: String, granted: Bool, prefPane: String) -> some View {
         HStack {
             Image(systemName: granted ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
                 .foregroundColor(granted ? .green : .orange)
+                .accessibilityHidden(true)
             
             VStack(alignment: .leading, spacing: 2) {
                 Text(name).fontWeight(.medium)
@@ -359,6 +380,7 @@ public struct OnboardingView: View {
                 }
                 .buttonStyle(.bordered)
                 .font(.caption)
+                .accessibilityLabel("Open \(name) in System Settings")
             } else {
                 Text("Granted")
                     .font(.caption)
@@ -368,6 +390,7 @@ public struct OnboardingView: View {
         .padding(8)
         .background(Color.secondary.opacity(0.06))
         .cornerRadius(6)
+        .accessibilityElement(children: .contain)
     }
     
     private func checkPermissions() {
@@ -383,6 +406,7 @@ public struct OnboardingView: View {
         var config = PearlConfig.load()
         config.pushToTalkDefault = state.pushToTalk
         config.hotkey = state.hotkeyString.lowercased().replacingOccurrences(of: " ", with: "")
+        config.mlxEnabled = (state.selectedBrain == .localWeights)
         config.save()
     }
 }

@@ -3,12 +3,15 @@ import SwiftUI
 import Foundation
 import Speech
 import AVFoundation
+import ServiceManagement
 import PearlCore
 import PearlTools
 import PearlVoice
 import PearlMemory
 
 public final class AppDelegate: NSObject, NSApplicationDelegate {
+    public static weak var shared: AppDelegate?
+    
     private var hudPanel: HUDPanel!
     private var statusController: StatusItemController!
     private var socketServer: UnixSocketServer!
@@ -23,13 +26,78 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     }
     private var pendingAutoLeave: PendingAutoLeave?
     
+    // MARK: - Structured IPC JSON Payloads for `tools`
+    
+    private struct ToolSummaryPayload: Codable {
+        let name: String
+        let description: String
+        let tier: Int
+        let tierLabel: String
+        let isReversible: Bool
+        let requiresConfirmation: Bool
+        let supportsUndo: Bool
+        let requiredTCC: [String]
+        let nativeAssistantExposed: Bool
+        let cliExposed: Bool
+        let mcpExposed: Bool
+        let registeredInCatalog: Bool
+        let registeredInRegistry: Bool
+    }
+    
+    private struct ToolsListPayload: Codable {
+        let catalogCount: Int
+        let registryCount: Int
+        let totalCount: Int
+        let tools: [ToolSummaryPayload]
+    }
+    
+    private struct ToolInspectPayload: Codable {
+        let name: String
+        let description: String
+        let tier: Int
+        let tierLabel: String
+        let registeredInCatalog: Bool
+        let registeredInRegistry: Bool
+        let hasMetadata: Bool
+        let isReversible: Bool
+        let requiresConfirmation: Bool
+        let supportsUndo: Bool
+        let timeoutSeconds: Double
+        let requiredTCC: [String]
+        let nativeAssistantExposed: Bool
+        let cliExposed: Bool
+        let mcpExposed: Bool
+        let arguments: [ToolArgumentDescriptor]
+    }
+    
+    private struct ToolsDoctorPayload: Codable {
+        let isHealthy: Bool
+        let catalogCount: Int
+        let registryCount: Int
+        let missingFromToolRegistry: [String]
+        let missingFromCatalog: [String]
+        let metadataWithoutImplementation: [String]
+        let tierMismatches: [String]
+        let descriptorMismatches: [String]
+        let mcpViolations: [String]
+    }
+    
     public func applicationDidFinishLaunching(_ notification: Notification) {
+        AppDelegate.shared = self
         NSApplication.shared.setActivationPolicy(.accessory)
         
         let config = PearlConfig.load()
         
         // 1. Initialize pre-created floating HUD pill
         hudPanel = HUDPanel()
+        hudPanel.onTextInputOpened = {
+            LiveSpeechRecognizer.shared.stopListening()
+            SpeechSynthesizerService.shared.stopPlayback()
+            AudioPipelineService.shared.enterStandby()
+        }
+        hudPanel.hudView.onSubmitTextQuery = { [weak self] text in
+            self?.submitHUDTextQuery(text)
+        }
         
         // 2. Setup Menu Bar Status Item
         statusController = StatusItemController()
@@ -55,11 +123,19 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         CarbonHotkeyManager.shared.registerDefaultHotkey()
         
-        // 4. Register Native Typed Tools & Memory Provider
+        // 4. Register Native Typed Tools, Revalidate Folder Bookmarks & Bind Memory Provider
         registerNativeTools()
         AssistantPipeline.shared.memoryProvider = PearlMemoryProvider.shared
         
-        // 5. Setup Live Voice Pipeline & 60 Hz Metering
+        // 5. Sync Login Item preference safely when running from a bundled .app
+        if config.launchAtLoginEnabled && Bundle.main.bundleURL.pathExtension == "app" {
+            let result = AppDelegate.setLaunchAtLogin(true)
+            if case .failure(let error) = result {
+                NSLog("[Pearl] Login item registration notice: %@", error.localizedDescription)
+            }
+        }
+        
+        // 6. Setup Live Voice Pipeline & 60 Hz Metering
         let speech = LiveSpeechRecognizer.shared
         speech.onAudioLevelUpdated = { [weak self] level in
             self?.hudPanel.hudView.updateAudioLevel(CGFloat(level))
@@ -82,7 +158,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
                     if pending.seconds > 0 {
                         self.hudPanel.scheduleAutoLeave(after: pending.seconds, dismissOnAppSwitch: pending.dismissOnAppSwitch)
                     }
-                } else {
+                } else if !self.hudPanel.hudView.isConfirmationActive && !self.hudPanel.hudView.isTextInputExpanded {
                     self.hudPanel.scheduleAutoLeave(after: 4.0, dismissOnAppSwitch: true)
                 }
             }
@@ -100,7 +176,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
             NSLog("[Pearl] Audio capture granted: %d", granted)
         }
         
-        // 6. Setup Unix Domain Socket Server for CLI
+        // 7. Setup Unix Domain Socket Server for CLI
         socketServer = UnixSocketServer(socketPath: config.socketPath)
         socketServer.onCommandHandler = { [weak self] request in
             guard let self = self else {
@@ -116,7 +192,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
             NSLog("[Pearl] Failed to start IPC socket server: %@", error.localizedDescription)
         }
         
-        // 6. Memory Pressure Warning Source
+        // 8. Memory Pressure Warning Source
         let memSource = DispatchSource.makeMemoryPressureSource(eventMask: [.warning, .critical], queue: .main)
         memSource.setEventHandler { [weak self] in
             let mask = memSource.mask
@@ -128,8 +204,8 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         memSource.resume()
         memoryPressureSource = memSource
         
-        // 7. V3.2 Skill, Recipe, Persona & Global KillSwitch Wiring
-        if let savedMode = PersonaMode(rawValue: PearlConfig.load().activePersona.lowercased()) {
+        // 9. V3.3 Skill, Recipe, Persona & Global KillSwitch Wiring
+        if let savedMode = PersonaMode(rawValue: config.activePersona.lowercased()) {
             PersonaEngine.shared.setMode(savedMode)
         }
         RecipeEngine.shared.ensureSeeded()
@@ -146,7 +222,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
         
-        NSLog("[Pearl] Initialized successfully. Resident memory footprint ready.")
+        NSLog("[Pearl] v%@ initialized successfully. Resident memory footprint ready.", PearlConfig.currentVersion)
     }
     
     public func applicationWillTerminate(_ notification: Notification) {
@@ -155,13 +231,40 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         memoryPressureSource?.cancel()
     }
     
+    // MARK: - Login Item Management (SMAppService)
+    
+    public static func setLaunchAtLogin(_ enabled: Bool) -> Result<SMAppService.Status, Error> {
+        let service = SMAppService.mainApp
+        do {
+            if enabled {
+                if service.status != .enabled {
+                    try service.register()
+                }
+            } else {
+                if service.status == .enabled || service.status == .requiresApproval {
+                    try service.unregister()
+                }
+            }
+            return .success(service.status)
+        } catch {
+            NSLog("[Pearl] SMAppService launch-at-login update failed: %@", error.localizedDescription)
+            return .failure(error)
+        }
+    }
+    
+    public static var currentLaunchAtLoginStatus: SMAppService.Status {
+        return SMAppService.mainApp.status
+    }
+    
+    // MARK: - Startup Tool & Bookmark Registration
+    
     private func registerNativeTools() {
         PearlToolsRegistry.registerAll(into: ToolRegistry.shared, catalog: CentralToolCatalog.shared)
-        let reg = ToolRegistry.shared
-        reg.register(ListTasksTool())
-        reg.register(CreateTaskTool())
-        reg.register(CompleteTaskTool())
-        reg.register(DeleteTaskTool())
+        CentralToolCatalog.shared.registerDefaultCoreTools()
+        let folderEntries = FilesystemPermissionManager.shared.revalidateBookmarks()
+        NSLog("[Pearl] Registered %d tool(s); revalidated %d approved folder bookmark(s).",
+              CentralToolCatalog.shared.allTools().count,
+              folderEntries.count)
     }
     
     private func toggleHUD() {
@@ -182,124 +285,207 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
     
-    private func handleVoiceUtterance(_ utterance: String) {
-        guard !utterance.isEmpty else { return }
+    // MARK: - Unified Voice & HUD Text Command Execution
+    
+    public func submitHUDTextQuery(_ text: String, confirmed: Bool = false) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
         
-        hudPanel.showPill(text: "Thinking...", thinking: true)
+        LiveSpeechRecognizer.shared.stopListening()
+        SpeechSynthesizerService.shared.stopPlayback()
+        AudioPipelineService.shared.enterStandby()
+        
+        executeUtteranceOnHUD(
+            trimmed,
+            origin: .cli,
+            userConfirmed: confirmed,
+            freshConfirmationArgs: nil
+        )
+    }
+    
+    private func handleVoiceUtterance(_ utterance: String) {
+        let trimmed = utterance.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        
+        executeUtteranceOnHUD(
+            trimmed,
+            origin: .voice,
+            userConfirmed: false,
+            freshConfirmationArgs: nil
+        )
+    }
+    
+    private func executeUtteranceOnHUD(
+        _ utterance: String,
+        origin: RequestOrigin,
+        sessionID: String = "default",
+        userConfirmed: Bool = false,
+        freshConfirmationArgs: [String: String]? = nil
+    ) {
+        DispatchQueue.main.async { [weak self] in
+            self?.hudPanel.showPill(text: "Thinking...", thinking: true)
+        }
         
         Task { [weak self] in
             guard let self = self else { return }
-            let request = AssistantRequest(utterance: utterance, origin: .voice)
+            let request = AssistantRequest(
+                utterance: utterance,
+                origin: origin,
+                sessionID: sessionID,
+                userConfirmed: userConfirmed,
+                freshConfirmationArgs: freshConfirmationArgs
+            )
             let response = await AssistantPipeline.shared.process(request: request)
             
             await MainActor.run {
-                self.hudPanel.recordTurn(
-                    userUtterance: utterance,
-                    assistantResponse: response.responseText,
-                    badgeLabel: response.badge.label,
-                    isLocal: response.badge.isLocal,
-                    latencyMs: response.latencyMs
+                self.presentResponseOnHUD(
+                    utterance: utterance,
+                    response: response,
+                    origin: origin,
+                    sessionID: sessionID,
+                    wasConfirmedRetry: userConfirmed
                 )
-                
-                let isConfirmation = response.responseText.localizedCaseInsensitiveContains("confirmation required") ||
-                                     response.responseText.localizedCaseInsensitiveContains("user confirmation required")
-                
-                let decision = response.outputDecision ?? OutputDirector.shared.decide(
-                    responseText: response.responseText,
-                    speechText: response.speechText,
-                    origin: .voice,
-                    requiresConfirmation: isConfirmation
-                )
-                
-                if isConfirmation || decision.autoLeaveSeconds == 0 {
-                    let toolName = response.badge.modelID.isEmpty ? "Action" : response.badge.modelID
-                    self.hudPanel.showConfirmation(
-                        toolName: toolName,
-                        prompt: response.responseText,
-                        tier: "T2",
-                        onConfirm: { [weak self] in
-                            Task { [weak self] in
-                                let confirmedReq = AssistantRequest(
-                                    utterance: utterance,
-                                    origin: .voice,
-                                    userConfirmed: true
-                                )
-                                let confirmedResp = await AssistantPipeline.shared.process(request: confirmedReq)
-                                await MainActor.run {
-                                    guard let self = self else { return }
-                                    self.hudPanel.recordTurn(
-                                        userUtterance: "Confirmed: \(utterance)",
-                                        assistantResponse: confirmedResp.responseText,
-                                        badgeLabel: confirmedResp.badge.label,
-                                        isLocal: confirmedResp.badge.isLocal,
-                                        latencyMs: confirmedResp.latencyMs
-                                    )
-                                    let confirmedDecision = confirmedResp.outputDecision ?? OutputDirector.shared.decide(
-                                        responseText: confirmedResp.responseText,
-                                        speechText: confirmedResp.speechText,
-                                        origin: .voice
-                                    )
-                                    self.hudPanel.showPill(
-                                        text: confirmedDecision.hudText,
-                                        thinking: false,
-                                        tierBadge: confirmedResp.badge.label,
-                                        isLocal: confirmedResp.badge.isLocal
-                                    )
-                                    if (confirmedDecision.mode == .speakFull || confirmedDecision.mode == .speakSummaryAndHUD),
-                                       let spoken = confirmedDecision.spokenText, !spoken.isEmpty {
-                                        self.pendingAutoLeave = PendingAutoLeave(
-                                            seconds: confirmedDecision.autoLeaveSeconds,
-                                            dismissOnAppSwitch: confirmedDecision.dismissOnAppSwitch
-                                        )
-                                        SpeechSynthesizerService.shared.speak(text: spoken)
-                                    } else {
-                                        self.hudPanel.scheduleAutoLeave(
-                                            after: confirmedDecision.autoLeaveSeconds,
-                                            dismissOnAppSwitch: confirmedDecision.dismissOnAppSwitch
-                                        )
-                                    }
-                                }
-                            }
-                        },
-                        onCancel: { [weak self] in
-                            guard let self = self else { return }
-                            self.hudPanel.showPill(text: "Action cancelled", thinking: false)
-                            self.hudPanel.scheduleAutoLeave(after: 2.0, dismissOnAppSwitch: true)
-                        }
-                    )
-                    
-                    if (decision.mode == .speakFull || decision.mode == .speakSummaryAndHUD),
-                       let spoken = decision.spokenText, !spoken.isEmpty {
-                        self.pendingAutoLeave = PendingAutoLeave(
-                            seconds: decision.autoLeaveSeconds,
-                            dismissOnAppSwitch: decision.dismissOnAppSwitch
-                        )
-                        SpeechSynthesizerService.shared.speak(text: spoken)
-                    }
-                } else {
-                    self.hudPanel.showPill(
-                        text: decision.hudText,
-                        thinking: false,
-                        tierBadge: response.badge.label,
-                        isLocal: response.badge.isLocal
-                    )
-                    
-                    if (decision.mode == .speakFull || decision.mode == .speakSummaryAndHUD),
-                       let spoken = decision.spokenText, !spoken.isEmpty {
-                        self.pendingAutoLeave = PendingAutoLeave(
-                            seconds: decision.autoLeaveSeconds,
-                            dismissOnAppSwitch: decision.dismissOnAppSwitch
-                        )
-                        SpeechSynthesizerService.shared.speak(text: spoken)
-                    } else {
-                        self.hudPanel.scheduleAutoLeave(
-                            after: decision.autoLeaveSeconds,
-                            dismissOnAppSwitch: decision.dismissOnAppSwitch
-                        )
-                    }
-                }
             }
         }
+    }
+    
+    @MainActor
+    private func presentResponseOnHUD(
+        utterance: String,
+        response: AssistantResponse,
+        origin: RequestOrigin,
+        sessionID: String = "default",
+        wasConfirmedRetry: Bool = false
+    ) {
+        let historyLabel = wasConfirmedRetry ? "Confirmed: \(utterance)" : utterance
+        hudPanel.recordTurn(
+            userUtterance: historyLabel,
+            assistantResponse: response.responseText,
+            badgeLabel: response.badge.label,
+            isLocal: response.badge.isLocal,
+            latencyMs: response.latencyMs
+        )
+        
+        let isConfirmation = response.requiresConfirmation ||
+            response.responseText.localizedCaseInsensitiveContains("confirmation required") ||
+            response.responseText.localizedCaseInsensitiveContains("user confirmation required")
+        
+        let decision = response.outputDecision ?? OutputDirector.shared.decide(
+            responseText: response.responseText,
+            speechText: response.speechText,
+            origin: origin,
+            requiresConfirmation: isConfirmation
+        )
+        
+        if isConfirmation || decision.autoLeaveSeconds == 0 {
+            let toolName = response.confirmationToolName ?? (response.badge.modelID.isEmpty ? "Action" : response.badge.modelID)
+            let tierLabel = resolvedTierLabel(forToolNamed: toolName)
+            let confirmationPrompt = formatConfirmationPrompt(response: response, toolName: toolName)
+            let pendingArgs = response.confirmationArguments
+            
+            hudPanel.showConfirmation(
+                toolName: toolName,
+                prompt: confirmationPrompt,
+                tier: tierLabel,
+                onConfirm: { [weak self] in
+                    self?.executeUtteranceOnHUD(
+                        utterance,
+                        origin: origin,
+                        sessionID: sessionID,
+                        userConfirmed: true,
+                        freshConfirmationArgs: pendingArgs
+                    )
+                },
+                onCancel: { [weak self] in
+                    guard let self = self else { return }
+                    self.hudPanel.showPill(text: "Action cancelled", thinking: false)
+                    self.hudPanel.scheduleAutoLeave(after: 2.0, dismissOnAppSwitch: true)
+                }
+            )
+            
+            if (decision.mode == .speakFull || decision.mode == .speakSummaryAndHUD),
+               let spoken = decision.spokenText, !spoken.isEmpty {
+                pendingAutoLeave = PendingAutoLeave(
+                    seconds: 0,
+                    dismissOnAppSwitch: false
+                )
+                SpeechSynthesizerService.shared.speak(text: spoken)
+            }
+        } else {
+            hudPanel.showPill(
+                text: decision.hudText,
+                thinking: false,
+                tierBadge: response.badge.label,
+                isLocal: response.badge.isLocal
+            )
+            
+            let effectiveLeaveSeconds: TimeInterval = response.needsClarification
+                ? max(decision.autoLeaveSeconds, 10.0)
+                : decision.autoLeaveSeconds
+            
+            if (decision.mode == .speakFull || decision.mode == .speakSummaryAndHUD),
+               let spoken = decision.spokenText, !spoken.isEmpty {
+                pendingAutoLeave = PendingAutoLeave(
+                    seconds: effectiveLeaveSeconds,
+                    dismissOnAppSwitch: decision.dismissOnAppSwitch
+                )
+                SpeechSynthesizerService.shared.speak(text: spoken)
+            } else {
+                hudPanel.scheduleAutoLeave(
+                    after: effectiveLeaveSeconds,
+                    dismissOnAppSwitch: decision.dismissOnAppSwitch
+                )
+            }
+        }
+    }
+    
+    private func resolvedTierLabel(forToolNamed toolName: String) -> String {
+        if let meta = CentralToolCatalog.shared.metadata(for: toolName) {
+            return "T\(meta.tier.rawValue)"
+        }
+        if let tool = CentralToolCatalog.shared.tool(named: toolName) ?? ToolRegistry.shared.tool(named: toolName) {
+            return "T\(tool.tier.rawValue)"
+        }
+        return "T2"
+    }
+    
+    private func formatConfirmationPrompt(response: AssistantResponse, toolName: String) -> String {
+        let args = response.confirmationArguments ?? [:]
+        var targetSummary: String? = nil
+        
+        if let src = args["source"], let dst = args["destination"], !src.isEmpty, !dst.isEmpty {
+            targetSummary = "\(src) → \(dst)"
+        } else if let path = args["path"], !path.isEmpty {
+            targetSummary = path
+        } else if let filename = args["filename"], !filename.isEmpty {
+            targetSummary = filename
+        } else if let to = args["to"], !to.isEmpty {
+            if let subject = args["subject"], !subject.isEmpty {
+                targetSummary = "To: \(to) — \(subject)"
+            } else {
+                targetSummary = "To: \(to)"
+            }
+        } else if let url = args["url"], !url.isEmpty {
+            targetSummary = url
+        } else if let name = args["name"], !name.isEmpty {
+            targetSummary = name
+        } else if let title = args["title"], !title.isEmpty {
+            targetSummary = title
+        } else if let id = args["id"], !id.isEmpty {
+            targetSummary = id
+        }
+        
+        let rawReason = (response.confirmationReason ?? response.responseText)
+            .replacingOccurrences(of: "Confirmation required: ", with: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        if let target = targetSummary {
+            if rawReason.localizedCaseInsensitiveContains(target) {
+                return rawReason
+            }
+            return rawReason.isEmpty ? target : "\(target) — \(rawReason)"
+        }
+        return rawReason.isEmpty ? "Confirm \(toolName)" : rawReason
     }
     
     private func handleMemoryPressure() {
@@ -311,8 +497,8 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     private func openSettings() {
         if settingsWindow == nil {
             let window = NSWindow(
-                contentRect: NSRect(x: 0, y: 0, width: 600, height: 480),
-                styleMask: [.titled, .closable, .miniaturizable],
+                contentRect: NSRect(x: 0, y: 0, width: 600, height: 520),
+                styleMask: [.titled, .closable, .miniaturizable, .resizable],
                 backing: .buffered,
                 defer: false
             )
@@ -347,6 +533,8 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApplication.shared.activate(ignoringOtherApps: true)
     }
     
+    // MARK: - Unix Socket IPC Handler
+    
     private func handleIPCRequest(_ req: IPCRequest) async -> IPCResponse {
         var timebaseInfo = mach_timebase_info()
         mach_timebase_info(&timebaseInfo)
@@ -363,7 +551,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
             let uptime = Int(Date().timeIntervalSince(launchDate))
             responseData["uptime_seconds"] = "\(uptime)"
             responseData["pid"] = "\(getpid())"
-            responseData["version"] = "3.2.0"
+            responseData["version"] = PearlConfig.currentVersion
             responseData["persona"] = PersonaEngine.shared.activeMode.rawValue
             
         case "status":
@@ -373,6 +561,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
             responseData["hud_visible"] = "\(isVisible)"
             responseData["frontmost_app"] = frontmostApp
             responseData["pid"] = "\(getpid())"
+            responseData["version"] = PearlConfig.currentVersion
             responseData["hotkey"] = "Ctrl+Opt+Space"
             
         case "show":
@@ -388,32 +577,61 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             responseMessage = "HUD panel hidden"
             
-        case "execute":
-            let query = req.arguments?["query"] ?? ""
-            let assistantReq = AssistantRequest(utterance: query, origin: .socket)
+        case "ask", "execute":
+            let query = req.arguments?["query"] ?? req.arguments?["utterance"] ?? ""
+            let sessionID = req.arguments?["sessionID"] ?? req.arguments?["session_id"] ?? "default"
+            let userConfirmed = (
+                req.arguments?["userConfirmed"]?.lowercased() == "true" ||
+                req.arguments?["confirm"]?.lowercased() == "true"
+            )
+            var freshArgs: [String: String]? = nil
+            if let rawArgsJSON = req.arguments?["freshConfirmationArgsJSON"] ?? req.arguments?["confirmationArgumentsJSON"],
+               let jsonData = rawArgsJSON.data(using: .utf8),
+               let decoded = try? JSONDecoder().decode([String: String].self, from: jsonData) {
+                freshArgs = decoded
+            }
+            
+            let assistantReq = AssistantRequest(
+                utterance: query,
+                origin: .cli,
+                sessionID: sessionID,
+                userConfirmed: userConfirmed,
+                freshConfirmationArgs: freshArgs
+            )
             let assistantResp = await AssistantPipeline.shared.process(request: assistantReq)
             responseMessage = assistantResp.responseText
             isSuccess = assistantResp.success
+            
+            responseData["requiresConfirmation"] = assistantResp.requiresConfirmation ? "true" : "false"
+            responseData["needsClarification"] = assistantResp.needsClarification ? "true" : "false"
+            if let toolName = assistantResp.confirmationToolName, !toolName.isEmpty {
+                responseData["confirmationToolName"] = toolName
+            }
+            if let reason = assistantResp.confirmationReason, !reason.isEmpty {
+                responseData["confirmationReason"] = reason
+            }
+            if let confirmArgs = assistantResp.confirmationArguments,
+               let encoded = try? JSONEncoder().encode(confirmArgs),
+               let jsonStr = String(data: encoded, encoding: .utf8) {
+                responseData["confirmationArgumentsJSON"] = jsonStr
+            }
+            
             await MainActor.run {
-                self.hudPanel.recordTurn(
-                    userUtterance: query,
-                    assistantResponse: assistantResp.responseText,
-                    badgeLabel: assistantResp.badge.label,
-                    isLocal: assistantResp.badge.isLocal,
-                    latencyMs: assistantResp.latencyMs
+                self.presentResponseOnHUD(
+                    utterance: query,
+                    response: assistantResp,
+                    origin: .cli,
+                    sessionID: sessionID,
+                    wasConfirmedRetry: userConfirmed
                 )
-                self.hudPanel.showPill(
-                    text: assistantResp.responseText,
-                    thinking: false,
-                    tierBadge: assistantResp.badge.label,
-                    isLocal: assistantResp.badge.isLocal
-                )
-                if let decision = assistantResp.outputDecision {
-                    self.hudPanel.scheduleAutoLeave(
-                        after: decision.autoLeaveSeconds,
-                        dismissOnAppSwitch: decision.dismissOnAppSwitch
-                    )
-                }
+            }
+            
+        case "tools":
+            let result = handleToolsIPC(arguments: req.arguments)
+            isSuccess = result.success
+            responseMessage = result.message
+            for (k, v) in result.data {
+                responseData[k] = v
             }
             
         case "toggle_history":
@@ -425,16 +643,67 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         case "confirm_tool":
             let toolName = req.arguments?["tool"] ?? "TestTool"
             let promptText = req.arguments?["prompt"] ?? "Execute sensitive tool action?"
+            let utterance = req.arguments?["utterance"] ?? req.arguments?["query"]
+            let sessionID = req.arguments?["sessionID"] ?? req.arguments?["session_id"] ?? "default"
+            var pendingArgs: [String: String]? = nil
+            if let rawJSON = req.arguments?["arguments"] ?? req.arguments?["confirmationArgumentsJSON"],
+               let jsonData = rawJSON.data(using: .utf8),
+               let decoded = try? JSONDecoder().decode([String: String].self, from: jsonData) {
+                pendingArgs = decoded
+            }
+            let tierLabel = resolvedTierLabel(forToolNamed: toolName)
+            
             await MainActor.run {
                 self.hudPanel.showConfirmation(
                     toolName: toolName,
                     prompt: promptText,
-                    tier: "T2",
+                    tier: tierLabel,
                     onConfirm: { [weak self] in
-                        self?.hudPanel.showPill(text: "Action confirmed", thinking: false)
+                        guard let self = self else { return }
+                        if let utterance = utterance, !utterance.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                            self.executeUtteranceOnHUD(
+                                utterance,
+                                origin: .cli,
+                                sessionID: sessionID,
+                                userConfirmed: true,
+                                freshConfirmationArgs: pendingArgs
+                            )
+                        } else if let tool = CentralToolCatalog.shared.tool(named: toolName) ?? ToolRegistry.shared.tool(named: toolName) {
+                            let args = pendingArgs ?? [:]
+                            self.hudPanel.showPill(text: "Executing \(toolName)...", thinking: true)
+                            Task { [weak self] in
+                                let ctx = ToolExecutionContext(
+                                    trustState: .trusted,
+                                    userConfirmed: true,
+                                    providerIsLocal: true,
+                                    freshConfirmationArgs: args
+                                )
+                                let resultMessage: String
+                                do {
+                                    let res = try await PolicyEngine.shared.execute(tool: tool, args: args, context: ctx)
+                                    resultMessage = res.message
+                                } catch {
+                                    resultMessage = "Execution failed: \(error.localizedDescription)"
+                                }
+                                await MainActor.run {
+                                    guard let self = self else { return }
+                                    self.hudPanel.recordTurn(
+                                        userUtterance: "Confirmed \(toolName)",
+                                        assistantResponse: resultMessage,
+                                        isLocal: true
+                                    )
+                                    self.hudPanel.showPill(text: resultMessage, thinking: false)
+                                    self.hudPanel.scheduleAutoLeave(after: 4.0, dismissOnAppSwitch: true)
+                                }
+                            }
+                        } else {
+                            self.hudPanel.showPill(text: "Action confirmed", thinking: false)
+                            self.hudPanel.scheduleAutoLeave(after: 2.5, dismissOnAppSwitch: true)
+                        }
                     },
                     onCancel: { [weak self] in
                         self?.hudPanel.showPill(text: "Action cancelled", thinking: false)
+                        self?.hudPanel.scheduleAutoLeave(after: 2.0, dismissOnAppSwitch: true)
                     }
                 )
             }
@@ -761,5 +1030,209 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
             data: responseData,
             latencyMs: latencyMs
         )
+    }
+    
+    // MARK: - Live Runtime `tools` IPC Subcommand Handler
+    
+    private func handleToolsIPC(arguments: [String: String]?) -> (success: Bool, message: String, data: [String: String]) {
+        let sub = (arguments?["subcommand"] ?? "list").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        
+        let catalog = CentralToolCatalog.shared
+        let registry = ToolRegistry.shared
+        
+        switch sub.isEmpty ? "list" : sub {
+        case "list":
+            let catalogTools = Dictionary(uniqueKeysWithValues: catalog.allTools().map { ($0.name.lowercased(), $0) })
+            let registryTools = Dictionary(uniqueKeysWithValues: registry.allTools().map { ($0.name.lowercased(), $0) })
+            let allKeys = Set(catalogTools.keys).union(registryTools.keys).sorted()
+            
+            let summaries: [ToolSummaryPayload] = allKeys.compactMap { key in
+                guard let tool = catalogTools[key] ?? registryTools[key] else { return nil }
+                let meta = catalog.metadata(for: key)
+                let tier = meta?.tier ?? tool.tier
+                let tcc = (meta?.requiredTCC ?? tool.requiredTCC).map(\.rawValue)
+                let reqConfirm = meta?.requiresConfirmation ?? (tier >= .t3WorkspaceChanges)
+                let supportsUndo = meta?.supportsUndo ?? tool.isReversible
+                return ToolSummaryPayload(
+                    name: tool.name,
+                    description: meta?.description ?? tool.description,
+                    tier: tier.rawValue,
+                    tierLabel: "T\(tier.rawValue)",
+                    isReversible: meta?.isReversible ?? tool.isReversible,
+                    requiresConfirmation: reqConfirm,
+                    supportsUndo: supportsUndo,
+                    requiredTCC: tcc,
+                    nativeAssistantExposed: meta?.nativeAssistantExposed ?? true,
+                    cliExposed: meta?.cliExposed ?? true,
+                    mcpExposed: meta?.mcpExposed ?? (tier <= .t2ReadPersonal),
+                    registeredInCatalog: catalogTools[key] != nil,
+                    registeredInRegistry: registryTools[key] != nil
+                )
+            }
+            
+            let payload = ToolsListPayload(
+                catalogCount: catalogTools.count,
+                registryCount: registryTools.count,
+                totalCount: summaries.count,
+                tools: summaries
+            )
+            
+            var data: [String: String] = ["count": "\(summaries.count)"]
+            if let encoded = try? encoder.encode(payload), let json = String(data: encoded, encoding: .utf8) {
+                data["json"] = json
+            }
+            
+            let lines = summaries.map { item in
+                let tccStr = item.requiredTCC.isEmpty ? "none" : item.requiredTCC.joined(separator: ",")
+                let flags = [
+                    item.requiresConfirmation ? "confirm" : "auto",
+                    item.isReversible ? "undo" : "no-undo",
+                    item.mcpExposed ? "mcp" : "local-only"
+                ].joined(separator: ", ")
+                return "• [\(item.tierLabel)] \(item.name) — \(item.description) (TCC: \(tccStr); \(flags))"
+            }
+            let message = "Live Runtime Tools (\(summaries.count) total; catalog: \(catalogTools.count), registry: \(registryTools.count)):\n" + lines.joined(separator: "\n")
+            return (true, message, data)
+            
+        case "inspect":
+            let rawName = (arguments?["name"] ?? arguments?["tool"] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !rawName.isEmpty else {
+                return (false, "Missing 'name' argument for 'tools inspect'.", [:])
+            }
+            let catalogTool = catalog.tool(named: rawName)
+            let registryTool = registry.tool(named: rawName)
+            let meta = catalog.metadata(for: rawName)
+            
+            guard let liveTool = catalogTool ?? registryTool else {
+                if let meta = meta {
+                    let payload = ToolInspectPayload(
+                        name: meta.name,
+                        description: meta.description,
+                        tier: meta.tier.rawValue,
+                        tierLabel: "T\(meta.tier.rawValue)",
+                        registeredInCatalog: false,
+                        registeredInRegistry: false,
+                        hasMetadata: true,
+                        isReversible: meta.isReversible,
+                        requiresConfirmation: meta.requiresConfirmation,
+                        supportsUndo: meta.supportsUndo,
+                        timeoutSeconds: meta.timeoutSeconds,
+                        requiredTCC: meta.requiredTCC.map(\.rawValue),
+                        nativeAssistantExposed: meta.nativeAssistantExposed,
+                        cliExposed: meta.cliExposed,
+                        mcpExposed: meta.mcpExposed,
+                        arguments: meta.arguments
+                    )
+                    var data: [String: String] = [:]
+                    if let encoded = try? encoder.encode(payload), let json = String(data: encoded, encoding: .utf8) {
+                        data["json"] = json
+                    }
+                    let msg = "Tool '\(meta.name)' [T\(meta.tier.rawValue)] has catalog metadata but is NOT registered in runtime ToolRegistry."
+                    return (false, msg, data)
+                }
+                return (false, "Tool '\(rawName)' is not registered in runtime catalog or registry.", [:])
+            }
+            
+            let tier = meta?.tier ?? liveTool.tier
+            let tcc = (meta?.requiredTCC ?? liveTool.requiredTCC).map(\.rawValue)
+            let args = (meta?.arguments.isEmpty == false ? meta?.arguments : nil) ?? liveTool.argumentDescriptors
+            let payload = ToolInspectPayload(
+                name: liveTool.name,
+                description: meta?.description ?? liveTool.description,
+                tier: tier.rawValue,
+                tierLabel: "T\(tier.rawValue)",
+                registeredInCatalog: catalogTool != nil,
+                registeredInRegistry: registryTool != nil,
+                hasMetadata: meta != nil,
+                isReversible: meta?.isReversible ?? liveTool.isReversible,
+                requiresConfirmation: meta?.requiresConfirmation ?? (tier >= .t3WorkspaceChanges),
+                supportsUndo: meta?.supportsUndo ?? liveTool.isReversible,
+                timeoutSeconds: meta?.timeoutSeconds ?? 15.0,
+                requiredTCC: tcc,
+                nativeAssistantExposed: meta?.nativeAssistantExposed ?? true,
+                cliExposed: meta?.cliExposed ?? true,
+                mcpExposed: meta?.mcpExposed ?? (tier <= .t2ReadPersonal),
+                arguments: args
+            )
+            
+            var data: [String: String] = ["name": payload.name]
+            if let encoded = try? encoder.encode(payload), let json = String(data: encoded, encoding: .utf8) {
+                data["json"] = json
+            }
+            
+            var lines: [String] = [
+                "Tool: \(payload.name) [\(payload.tierLabel)]",
+                "Description: \(payload.description)",
+                "Runtime Registration: catalog=\(payload.registeredInCatalog ? "yes" : "no"), registry=\(payload.registeredInRegistry ? "yes" : "no"), metadata=\(payload.hasMetadata ? "yes" : "no")",
+                "Policy: requiresConfirmation=\(payload.requiresConfirmation), reversible=\(payload.isReversible), supportsUndo=\(payload.supportsUndo), timeout=\(String(format: "%.1fs", payload.timeoutSeconds))",
+                "Required TCC: \(payload.requiredTCC.isEmpty ? "none" : payload.requiredTCC.joined(separator: ", "))",
+                "Exposure: assistant=\(payload.nativeAssistantExposed), cli=\(payload.cliExposed), mcp=\(payload.mcpExposed)"
+            ]
+            if payload.arguments.isEmpty {
+                lines.append("Arguments: none")
+            } else {
+                lines.append("Arguments:")
+                for arg in payload.arguments {
+                    let reqTag = arg.isRequired ? "required" : "optional"
+                    let allowed = arg.allowedValues.map { " [allowed: \($0.joined(separator: "|"))]" } ?? ""
+                    lines.append("  • \(arg.name) (\(arg.type), \(reqTag)) — \(arg.description)\(allowed)")
+                }
+            }
+            return (true, lines.joined(separator: "\n"), data)
+            
+        case "doctor":
+            let report = catalog.auditConsistency(against: registry)
+            let payload = ToolsDoctorPayload(
+                isHealthy: report.isHealthy,
+                catalogCount: report.catalogCount,
+                registryCount: report.registryCount,
+                missingFromToolRegistry: report.missingFromToolRegistry,
+                missingFromCatalog: report.missingFromCatalog,
+                metadataWithoutImplementation: report.metadataWithoutImplementation,
+                tierMismatches: report.tierMismatches,
+                descriptorMismatches: report.descriptorMismatches,
+                mcpViolations: report.mcpViolations
+            )
+            var data: [String: String] = [
+                "healthy": report.isHealthy ? "true" : "false",
+                "catalogCount": "\(report.catalogCount)",
+                "registryCount": "\(report.registryCount)"
+            ]
+            if let encoded = try? encoder.encode(payload), let json = String(data: encoded, encoding: .utf8) {
+                data["json"] = json
+            }
+            
+            var lines: [String] = [
+                "Live Tool Consistency Audit: \(report.isHealthy ? "HEALTHY" : "ISSUES DETECTED")",
+                "Runtime Counts: catalog=\(report.catalogCount), ToolRegistry=\(report.registryCount)"
+            ]
+            if !report.missingFromToolRegistry.isEmpty {
+                lines.append("• Missing from ToolRegistry: \(report.missingFromToolRegistry.joined(separator: ", "))")
+            }
+            if !report.missingFromCatalog.isEmpty {
+                lines.append("• Missing from CentralToolCatalog: \(report.missingFromCatalog.joined(separator: ", "))")
+            }
+            if !report.metadataWithoutImplementation.isEmpty {
+                lines.append("• Metadata without runtime implementation: \(report.metadataWithoutImplementation.joined(separator: ", "))")
+            }
+            if !report.tierMismatches.isEmpty {
+                lines.append("• Tier mismatches: \(report.tierMismatches.joined(separator: "; "))")
+            }
+            if !report.descriptorMismatches.isEmpty {
+                lines.append("• Descriptor mismatches: \(report.descriptorMismatches.joined(separator: "; "))")
+            }
+            if !report.mcpViolations.isEmpty {
+                lines.append("• MCP boundary violations: \(report.mcpViolations.joined(separator: "; "))")
+            }
+            if report.isHealthy {
+                lines.append("All runtime tool registrations, schemas, tiers, and MCP boundaries verified.")
+            }
+            return (report.isHealthy, lines.joined(separator: "\n"), data)
+            
+        default:
+            return (false, "Unknown tools subcommand '\(sub)'. Valid options: list, inspect, doctor", [:])
+        }
     }
 }
