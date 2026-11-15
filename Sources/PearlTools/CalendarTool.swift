@@ -34,14 +34,15 @@ public struct LocalCalendarEvent: Codable, Sendable {
 
 public actor CalendarLocalStore {
     public static let shared = CalendarLocalStore()
-    
+
+    private let customStoreURL: URL?
+
+    public init(localStoreURL: URL? = nil) {
+        self.customStoreURL = localStoreURL
+    }
+
     private var localStoreURL: URL {
-        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        let pearlDir = appSupport.appendingPathComponent("Pearl", isDirectory: true)
-        try? FileManager.default.createDirectory(at: pearlDir, withIntermediateDirectories: true, attributes: [
-            .posixPermissions: 0o700
-        ])
-        return pearlDir.appendingPathComponent("calendar_events.json")
+        return customStoreURL ?? PearlStoragePaths.fileURL(named: "calendar_events.json")
     }
     
     public func loadEvents() -> [LocalCalendarEvent] {
@@ -56,6 +57,11 @@ public actor CalendarLocalStore {
         var events = loadEvents()
         events.removeAll(where: { $0.id == event.id })
         events.append(event)
+        try? FileManager.default.createDirectory(
+            at: localStoreURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true,
+            attributes: [.posixPermissions: 0o700]
+        )
         if let data = try? JSONEncoder().encode(events) {
             try? data.write(to: localStoreURL, options: .atomic)
         }

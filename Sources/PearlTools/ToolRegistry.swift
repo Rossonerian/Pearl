@@ -47,6 +47,10 @@ public struct PearlToolsRegistry {
             UndoTool(),
             
             // File & Directory Operations (Allowlisted & Quarantined)
+            CreateDirectoryTool(),
+            ListDirectoryTool(),
+            RenameFileTool(),
+            TrashFileTool(),
             SearchFilesTool(),
             ReadFileSafeTool(),
             CopyFileTool(),
@@ -96,8 +100,19 @@ public struct PearlToolsRegistry {
         catalog: CentralToolCatalog = .shared
     ) {
         for tool in allTools() {
+            registry.register(tool)
             catalog.register(tool)
         }
+    }
+
+    /// Bootstraps all PearlTools and core task tools into both the provided `ToolRegistry` and `CentralToolCatalog`.
+    public static func bootstrapAllTools(
+        into registry: ToolRegistry = .shared,
+        catalog: CentralToolCatalog = .shared
+    ) {
+        registerAll(into: registry, catalog: catalog)
+        registry.registerTaskTools()
+        catalog.registerDefaultCoreTools()
     }
 }
 

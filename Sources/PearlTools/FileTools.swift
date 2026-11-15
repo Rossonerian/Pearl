@@ -8,7 +8,11 @@ public enum FolderValidationError: Error, LocalizedError, Equatable, Sendable {
     case sensitivePathBlocked(path: String)
     case pathDoesNotExist(path: String)
     case emptyPath
-    
+    case relativePathNotSupported(String)
+    case invalidPath(String)
+    case pathTraversalBlocked(String)
+    case permissionDenied(String)
+
     public var errorDescription: String? {
         switch self {
         case .blockedByNeverTier(let reason):
@@ -21,108 +25,126 @@ public enum FolderValidationError: Error, LocalizedError, Equatable, Sendable {
             return "Path '\(path)' does not exist."
         case .emptyPath:
             return "Path cannot be empty."
+        case .relativePathNotSupported(let path):
+            return "Relative path '\(path)' is not supported. Provide an absolute path or a path starting with '~/'. "
+        case .invalidPath(let path):
+            return "Path '\(path)' is invalid or unsupported."
+        case .pathTraversalBlocked(let path):
+            return "Path '\(path)' contains disallowed '..' traversal segments."
+        case .permissionDenied(let path):
+            return "Permission denied for path '\(path)'."
+        }
+    }
+
+    /// Maps a validation failure to the canonical `PearlToolErrorCode`.
+    public var toolErrorCode: PearlToolErrorCode {
+        switch self {
+        case .emptyPath, .relativePathNotSupported, .invalidPath, .pathTraversalBlocked:
+            return .invalidArguments
+        case .outsideAllowedFolders:
+            return .outsideApprovedFolders
+        case .sensitivePathBlocked, .blockedByNeverTier, .permissionDenied:
+            return .permissionDenied
+        case .pathDoesNotExist:
+            return .parentMissing
         }
     }
 }
 
-/// Enforces folder allowlisting, symlink resolution, and NeverTier sensitive path blocking.
+/// Enforces folder allowlisting, ancestral symlink resolution, and NeverTier sensitive path blocking.
 public struct FolderAllowlistValidator: Sendable {
-    public let allowedFolders: [String]
-    
     public static let defaultAllowedFolders: [String] = [
         "~/Documents", "~/Downloads", "~/Desktop", "~/Projects"
     ]
-    
-    public init(allowedFolders: [String]? = nil) {
-        self.allowedFolders = allowedFolders ?? Self.defaultAllowedFolders
+
+    public static var sensitiveDirectories: [String] {
+        return FilesystemPermissionManager.systemProtectedRoots + FilesystemPermissionManager.userSensitiveRoots
     }
-    
+
+    private let explicitAllowedFolders: [String]?
+    private let permissionManager: FilesystemPermissionManager
+
+    public var allowedFolders: [String] {
+        return explicitAllowedFolders ?? permissionManager.approvedFolderPaths()
+    }
+
+    public var allowedRoots: [String] {
+        return permissionManager.approvedFolderPaths()
+    }
+
+    public init(allowedFolders: [String]? = nil, permissionManager: FilesystemPermissionManager? = nil) {
+        self.explicitAllowedFolders = allowedFolders
+        if let explicit = allowedFolders {
+            self.permissionManager = permissionManager ?? FilesystemPermissionManager(allowedFoldersOverride: explicit)
+        } else {
+            self.permissionManager = permissionManager ?? .shared
+        }
+    }
+
+    /// Resolves a raw path ancestrally without checking allowlist boundaries.
+    public func resolvePath(_ rawPath: String) throws -> String {
+        return try permissionManager.normalizeAndResolvePath(rawPath)
+    }
+
     /// Checks whether a given path violates hard security policies (NeverTier, sensitive directories, secrets).
     public static func isNeverAllowed(path: String) -> (blocked: Bool, reason: String?) {
-        let expanded = (path as NSString).expandingTildeInPath
-        let resolved = URL(fileURLWithPath: expanded).resolvingSymlinksInPath().path
-        let lowerResolved = resolved.lowercased()
-        let lowerExpanded = expanded.lowercased()
-        
-        // 1. Direct NeverTier evaluation
-        let neverCheck = NeverTierValidator.validate(command: resolved)
-        if neverCheck.isDenied {
-            return (true, neverCheck.reason ?? "Never-Tier policy violation")
+        let trimmed = path.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return (false, nil) }
+
+        let resolved = (try? FilesystemPermissionManager.normalizeAndResolvePathStatic(trimmed))
+            ?? (trimmed as NSString).expandingTildeInPath
+        let expanded = (try? FilesystemPermissionManager.normalizeWithoutSymlinkResolution(trimmed))
+            ?? (trimmed as NSString).expandingTildeInPath
+
+        if FilesystemPermissionManager.isSensitiveOrSystemPath(canonicalPath: resolved, rawPath: expanded) {
+            return (true, "NeverTier: Path '\(resolved)' is recognized as a sensitive system or user location")
         }
-        let expNeverCheck = NeverTierValidator.validate(command: expanded)
-        if expNeverCheck.isDenied {
-            return (true, expNeverCheck.reason ?? "Never-Tier policy violation")
-        }
-        
-        // 2. Prohibited directories and paths
-        let forbiddenPatterns = [
-            "/.ssh", "/.aws", "/.gnupg", "/system", "/library", "/etc", "/private/etc", "keychain"
-        ]
-        
-        for pattern in forbiddenPatterns {
-            if lowerResolved.contains(pattern) || lowerExpanded.contains(pattern) {
-                return (true, "NeverTier: Access to '\(pattern)' is strictly forbidden")
-            }
-        }
-        
-        // 3. Prohibit .env and secret files
-        let fileName = URL(fileURLWithPath: resolved).lastPathComponent.lowercased()
-        let expFileName = URL(fileURLWithPath: expanded).lastPathComponent.lowercased()
-        if fileName == ".env" || fileName.hasPrefix(".env.") || expFileName == ".env" || expFileName.hasPrefix(".env.") {
-            return (true, "NeverTier: Access to environment secrets file (\(fileName)) is strictly forbidden")
-        }
-        
-        // 4. Seatbelt sensitive path check
-        if SeatbeltProfile.isSensitivePath(resolved) || SeatbeltProfile.isSensitivePath(expanded) {
-            return (true, "NeverTier: Path is recognized as a sensitive system or user location")
-        }
-        
         return (false, nil)
     }
-    
-    /// Resolves symlinks and ensures the target resides strictly within an expanded allowed folder,
-    /// rejecting any symlink escape or NeverTier violation.
-    public func validate(path: String) -> Result<String, FolderValidationError> {
-        let trimmed = path.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else {
-            return .failure(.emptyPath)
+
+    /// Resolves symlinks ancestrally and ensures the target resides strictly within an approved folder.
+    public func validate(path: String, requireExisting: Bool = false) -> Result<String, FolderValidationError> {
+        do {
+            let resolved = try permissionManager.validateApprovedPath(path, requireExisting: requireExisting)
+            return .success(resolved)
+        } catch let error as FolderValidationError {
+            return .failure(error)
+        } catch {
+            return .failure(.invalidPath(path))
         }
-        
-        let expanded = (trimmed as NSString).expandingTildeInPath
-        let resolved = URL(fileURLWithPath: expanded).resolvingSymlinksInPath().path
-        
-        // Check NeverTier / sensitive location on resolved and expanded paths
-        let (blockedResolved, reasonResolved) = Self.isNeverAllowed(path: resolved)
-        if blockedResolved {
-            return .failure(.blockedByNeverTier(reason: reasonResolved ?? "Sensitive path blocked"))
-        }
-        let (blockedExpanded, reasonExpanded) = Self.isNeverAllowed(path: expanded)
-        if blockedExpanded {
-            return .failure(.blockedByNeverTier(reason: reasonExpanded ?? "Sensitive path blocked"))
-        }
-        
-        // Verify resolved path resides within one of the expanded allowed folders
-        var isWithinAllowlist = false
-        for allowed in allowedFolders {
-            let expAllowed = (allowed as NSString).expandingTildeInPath
-            let resAllowed = URL(fileURLWithPath: expAllowed).resolvingSymlinksInPath().path
-            
-            if resolved == resAllowed || resolved.hasPrefix(resAllowed + "/") {
-                isWithinAllowlist = true
-                break
-            }
-        }
-        
-        guard isWithinAllowlist else {
-            return .failure(.outsideAllowedFolders(path: resolved))
-        }
-        
-        return .success(resolved)
     }
-    
-    public static func validate(path: String, allowedFolders: [String]? = nil) -> Result<String, FolderValidationError> {
+
+    /// Validates that a path is within approved folders, exists on disk, and is a directory.
+    public func validateDirectory(path: String) -> Result<String, FolderValidationError> {
+        switch validate(path: path, requireExisting: true) {
+        case .failure(let err):
+            return .failure(err)
+        case .success(let resolved):
+            var isDir: ObjCBool = false
+            guard FileManager.default.fileExists(atPath: resolved, isDirectory: &isDir), isDir.boolValue else {
+                return .failure(.invalidPath(resolved))
+            }
+            return .success(resolved)
+        }
+    }
+
+    /// Returns true when the canonical path matches one of the configured approved folder roots.
+    public func isApprovedRoot(_ resolvedPath: String) -> Bool {
+        let lower = resolvedPath.lowercased()
+        return allowedRoots.contains { $0.lowercased() == lower }
+    }
+
+    internal func containsResolvedPath(_ resolvedPath: String) -> Bool {
+        return allowedRoots.contains { FilesystemPermissionManager.path(resolvedPath, isWithinRoot: $0) }
+    }
+
+    public static func validate(
+        path: String,
+        allowedFolders: [String]? = nil,
+        requireExisting: Bool = false
+    ) -> Result<String, FolderValidationError> {
         let validator = FolderAllowlistValidator(allowedFolders: allowedFolders)
-        return validator.validate(path: path)
+        return validator.validate(path: path, requireExisting: requireExisting)
     }
 }
 
@@ -134,48 +156,60 @@ public final class SearchFilesTool: PearlTool {
     public let tier = ToolTier.t0Observe
     public let requiredTCC: [TCCService] = []
     public let isReversible = false
-    
+
     public var argumentDescriptors: [ToolArgumentDescriptor] {
         return [
-            ToolArgumentDescriptor(name: "query", type: "string", description: "Filename substring to search for", isRequired: true),
+            ToolArgumentDescriptor(name: "query", type: "string", description: "Filename substring to search for", isRequired: false),
             ToolArgumentDescriptor(name: "folder", type: "string", description: "Optional specific folder to search within allowed folders", isRequired: false),
             ToolArgumentDescriptor(name: "extension", type: "string", description: "Optional file extension filter without dot (e.g. 'txt', 'swift')", isRequired: false)
         ]
     }
-    
+
     public let validator: FolderAllowlistValidator
-    
+
     public init(validator: FolderAllowlistValidator = FolderAllowlistValidator()) {
         self.validator = validator
     }
-    
+
     public func execute(args: [String: String], context: ToolExecutionContext) async throws -> ToolResult {
-        guard let query = args["query"], !query.trimmingCharacters(in: .whitespaces).isEmpty else {
-            return ToolResult(success: false, message: "Missing required 'query' argument.")
+        let rawQuery = (args["query"] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let rawExt = (args["extension"] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let extFilter = (rawExt.hasPrefix(".") ? String(rawExt.dropFirst()) : rawExt).lowercased()
+
+        guard !rawQuery.isEmpty || !extFilter.isEmpty else {
+            return ToolResult(
+                success: false,
+                message: "Provide a 'query' substring or an 'extension' filter to search for files.",
+                errorCode: .invalidArguments
+            )
         }
-        
-        let extFilter = args["extension"]?.trimmingCharacters(in: .whitespaces).lowercased()
+
         let searchDirectories: [String]
-        
-        if let specificFolder = args["folder"], !specificFolder.trimmingCharacters(in: .whitespaces).isEmpty {
-            switch validator.validate(path: specificFolder) {
+        var canonicalTarget: String? = nil
+
+        if let specificFolder = args["folder"]?.trimmingCharacters(in: .whitespacesAndNewlines), !specificFolder.isEmpty {
+            switch validator.validateDirectory(path: specificFolder) {
             case .success(let resolved):
                 searchDirectories = [resolved]
+                canonicalTarget = resolved
             case .failure(let err):
-                return ToolResult(success: false, message: "Specified folder error: \(err.localizedDescription)")
+                return ToolResult(
+                    success: false,
+                    message: "Specified folder error: \(err.localizedDescription)",
+                    errorCode: err.toolErrorCode
+                )
             }
         } else {
-            searchDirectories = validator.allowedFolders.compactMap { folder in
-                let exp = (folder as NSString).expandingTildeInPath
-                let res = URL(fileURLWithPath: exp).resolvingSymlinksInPath().path
-                return FileManager.default.fileExists(atPath: res) ? res : nil
+            searchDirectories = validator.allowedRoots.filter { root in
+                var isDir: ObjCBool = false
+                return FileManager.default.fileExists(atPath: root, isDirectory: &isDir) && isDir.boolValue
             }
         }
-        
+
         var matches: [String] = []
         let maxResults = 25
-        let lowerQuery = query.lowercased()
-        
+        let lowerQuery = rawQuery.lowercased()
+
         for dir in searchDirectories {
             guard let enumerator = FileManager.default.enumerator(
                 at: URL(fileURLWithPath: dir),
@@ -184,35 +218,44 @@ public final class SearchFilesTool: PearlTool {
             ) else {
                 continue
             }
-            
+
             while let fileURL = enumerator.nextObject() as? URL {
                 if matches.count >= maxResults { break }
-                
+
                 let filePath = fileURL.resolvingSymlinksInPath().path
-                // Skip sensitive paths during search
-                if FolderAllowlistValidator.isNeverAllowed(path: filePath).blocked {
+                if FolderAllowlistValidator.isNeverAllowed(path: filePath).blocked || !validator.containsResolvedPath(filePath) {
                     continue
                 }
-                
+
                 let filename = fileURL.lastPathComponent
-                if filename.lowercased().contains(lowerQuery) {
-                    if let ext = extFilter, !ext.isEmpty {
-                        guard fileURL.pathExtension.lowercased() == ext else { continue }
-                    }
-                    
+                let matchesQuery = lowerQuery.isEmpty || filename.lowercased().contains(lowerQuery)
+                let matchesExt = extFilter.isEmpty || fileURL.pathExtension.lowercased() == extFilter
+
+                if matchesQuery && matchesExt {
                     let size = (try? fileURL.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
                     matches.append("\(filePath) (\(size) bytes)")
                 }
             }
             if matches.count >= maxResults { break }
         }
-        
+
         if matches.isEmpty {
-            return ToolResult(success: true, message: "No files found matching query '\(query)'.")
+            let criteria = !rawQuery.isEmpty ? "query '\(rawQuery)'" : ".\(extFilter) extension"
+            return ToolResult(
+                success: true,
+                message: "No files found matching \(criteria).",
+                errorCode: .completed,
+                canonicalPath: canonicalTarget
+            )
         }
-        
+
         let formatted = "Found \(matches.count) file(s):\n" + matches.joined(separator: "\n")
-        return ToolResult(success: true, message: formatted)
+        return ToolResult(
+            success: true,
+            message: formatted,
+            errorCode: .completed,
+            canonicalPath: canonicalTarget
+        )
     }
 }
 
@@ -224,62 +267,216 @@ public final class ReadFileSafeTool: PearlTool {
     public let tier = ToolTier.t0Observe
     public let requiredTCC: [TCCService] = []
     public let isReversible = false
-    
+
     public var argumentDescriptors: [ToolArgumentDescriptor] {
         return [
             ToolArgumentDescriptor(name: "path", type: "string", description: "Path to the file to read", isRequired: true)
         ]
     }
-    
+
     public let validator: FolderAllowlistValidator
-    
+
     public init(validator: FolderAllowlistValidator = FolderAllowlistValidator()) {
         self.validator = validator
     }
-    
+
     public func execute(args: [String: String], context: ToolExecutionContext) async throws -> ToolResult {
-        guard let path = args["path"], !path.trimmingCharacters(in: .whitespaces).isEmpty else {
-            return ToolResult(success: false, message: "Missing required 'path' argument.")
+        guard let path = args["path"]?.trimmingCharacters(in: .whitespacesAndNewlines), !path.isEmpty else {
+            return ToolResult(success: false, message: "Missing required 'path' argument.", errorCode: .invalidArguments)
         }
-        
+
         let resolvedPath: String
         switch validator.validate(path: path) {
         case .success(let resolved):
             resolvedPath = resolved
         case .failure(let err):
-            return ToolResult(success: false, message: "Access denied: \(err.localizedDescription)")
+            return ToolResult(
+                success: false,
+                message: "Access denied: \(err.localizedDescription)",
+                errorCode: err.toolErrorCode
+            )
         }
-        
+
         var isDir: ObjCBool = false
         guard FileManager.default.fileExists(atPath: resolvedPath, isDirectory: &isDir) else {
-            return ToolResult(success: false, message: "File does not exist: \(resolvedPath)")
+            return ToolResult(
+                success: false,
+                message: "File does not exist: \(resolvedPath)",
+                errorCode: .parentMissing,
+                canonicalPath: resolvedPath
+            )
         }
         if isDir.boolValue {
-            return ToolResult(success: false, message: "Path is a directory, not a regular file: \(resolvedPath)")
+            return ToolResult(
+                success: false,
+                message: "Path is a directory, not a regular file: \(resolvedPath)",
+                errorCode: .invalidArguments,
+                canonicalPath: resolvedPath
+            )
         }
-        
-        guard let fileHandle = try? FileHandle(forReadingFrom: URL(fileURLWithPath: resolvedPath)) else {
-            return ToolResult(success: false, message: "Could not open file handle for reading: \(resolvedPath)")
+
+        let fileHandle: FileHandle
+        do {
+            fileHandle = try FileHandle(forReadingFrom: URL(fileURLWithPath: resolvedPath))
+        } catch {
+            return ToolResult(
+                success: false,
+                message: "Could not open file handle for reading: \(resolvedPath)",
+                errorCode: FileToolErrorMapper.mapErrorCode(error) ?? .permissionDenied,
+                canonicalPath: resolvedPath
+            )
         }
         defer { try? fileHandle.close() }
-        
-        // Read up to 64 KB
+
         let maxBytes = 64 * 1024
         let rawData = fileHandle.readData(ofLength: maxBytes)
         let rawContent = String(decoding: rawData, as: UTF8.self)
-        
-        // Quarantine external text and mark context as tainted
+
         let sanitized = await QuarantinedReader.shared.sanitize(untrustedText: rawContent, source: "file")
         TaintTracker.shared.markTainted(
             source: "file",
             reason: "Read safe file at \(resolvedPath) (\(rawData.count) bytes)"
         )
-        
+
         return ToolResult(
             success: true,
             message: sanitized.summary,
-            trust: .untrusted
+            trust: .untrusted,
+            errorCode: .completed,
+            canonicalPath: resolvedPath
         )
+    }
+}
+
+// MARK: - Shared Transfer Helpers
+
+private enum FileTransferHelper {
+    struct ResolvedTransfer {
+        let source: String
+        let destination: String
+    }
+
+    enum TransferResolution {
+        case resolved(ResolvedTransfer)
+        case failure(ToolResult)
+    }
+
+    static func resolvePaths(
+        args: [String: String],
+        validator: FolderAllowlistValidator,
+        allowCaseOnlyOverwrite: Bool,
+        forbidMovingApprovedRoot: Bool
+    ) -> TransferResolution {
+        guard let rawSrc = args["source"]?.trimmingCharacters(in: .whitespacesAndNewlines),
+              let rawDst = args["destination"]?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !rawSrc.isEmpty, !rawDst.isEmpty else {
+            return .failure(ToolResult(
+                success: false,
+                message: "Missing required 'source' or 'destination' argument.",
+                errorCode: .invalidArguments
+            ))
+        }
+
+        let resolvedSrc: String
+        switch validator.validate(path: rawSrc) {
+        case .success(let s):
+            resolvedSrc = s
+        case .failure(let err):
+            return .failure(ToolResult(
+                success: false,
+                message: "Source access denied: \(err.localizedDescription)",
+                errorCode: err.toolErrorCode
+            ))
+        }
+
+        if forbidMovingApprovedRoot && validator.isApprovedRoot(resolvedSrc) {
+            return .failure(ToolResult(
+                success: false,
+                message: "Refusing to move approved root directory '\(resolvedSrc)'.",
+                errorCode: .permissionDenied,
+                canonicalPath: resolvedSrc
+            ))
+        }
+
+        let fm = FileManager.default
+        guard PathProbe.entryExists(resolvedSrc) else {
+            return .failure(ToolResult(
+                success: false,
+                message: "Source file does not exist: \(resolvedSrc)",
+                errorCode: .parentMissing,
+                canonicalPath: resolvedSrc
+            ))
+        }
+
+        let initialDst: String
+        switch validator.validate(path: rawDst) {
+        case .success(let d):
+            initialDst = d
+        case .failure(let err):
+            return .failure(ToolResult(
+                success: false,
+                message: "Destination access denied: \(err.localizedDescription)",
+                errorCode: err.toolErrorCode
+            ))
+        }
+
+        var dstIsDir: ObjCBool = false
+        let finalDst: String
+        if fm.fileExists(atPath: initialDst, isDirectory: &dstIsDir), dstIsDir.boolValue {
+            let sourceName = (resolvedSrc as NSString).lastPathComponent
+            let candidate = (initialDst as NSString).appendingPathComponent(sourceName)
+            switch validator.validate(path: candidate) {
+            case .success(let validatedChild):
+                finalDst = validatedChild
+            case .failure(let err):
+                return .failure(ToolResult(
+                    success: false,
+                    message: "Destination access denied: \(err.localizedDescription)",
+                    errorCode: err.toolErrorCode
+                ))
+            }
+        } else if rawDst.hasSuffix("/") {
+            return .failure(ToolResult(
+                success: false,
+                message: "Destination directory does not exist: \(initialDst)",
+                errorCode: .parentMissing,
+                canonicalPath: initialDst
+            ))
+        } else {
+            finalDst = initialDst
+        }
+
+        if resolvedSrc == finalDst {
+            return .failure(ToolResult(
+                success: false,
+                message: "Source and destination paths are identical: '\(finalDst)'.",
+                errorCode: .alreadyExists,
+                canonicalPath: finalDst
+            ))
+        }
+
+        let isCaseOnlyRename = allowCaseOnlyOverwrite && (resolvedSrc.lowercased() == finalDst.lowercased())
+        if !isCaseOnlyRename && PathProbe.entryExists(finalDst) {
+            return .failure(ToolResult(
+                success: false,
+                message: "Destination already exists: \(finalDst)",
+                errorCode: .alreadyExists,
+                canonicalPath: finalDst
+            ))
+        }
+
+        let destParent = (finalDst as NSString).deletingLastPathComponent
+        var parentIsDir: ObjCBool = false
+        guard fm.fileExists(atPath: destParent, isDirectory: &parentIsDir), parentIsDir.boolValue else {
+            return .failure(ToolResult(
+                success: false,
+                message: "Destination parent directory does not exist: \(destParent)",
+                errorCode: .parentMissing,
+                canonicalPath: finalDst
+            ))
+        }
+
+        return .resolved(ResolvedTransfer(source: resolvedSrc, destination: finalDst))
     }
 }
 
@@ -291,58 +488,67 @@ public final class CopyFileTool: PearlTool {
     public let tier = ToolTier.t1Reversible
     public let requiredTCC: [TCCService] = []
     public let isReversible = true
-    
+
     public var argumentDescriptors: [ToolArgumentDescriptor] {
         return [
             ToolArgumentDescriptor(name: "source", type: "string", description: "Source file path", isRequired: true),
-            ToolArgumentDescriptor(name: "destination", type: "string", description: "Destination file path", isRequired: true)
+            ToolArgumentDescriptor(name: "destination", type: "string", description: "Destination file or folder path", isRequired: true)
         ]
     }
-    
+
     public let validator: FolderAllowlistValidator
-    
+
     public init(validator: FolderAllowlistValidator = FolderAllowlistValidator()) {
         self.validator = validator
     }
-    
+
     public func execute(args: [String: String], context: ToolExecutionContext) async throws -> ToolResult {
-        guard let src = args["source"], let dst = args["destination"] else {
-            return ToolResult(success: false, message: "Missing required 'source' or 'destination' argument.")
+        let transfer: FileTransferHelper.ResolvedTransfer
+        switch FileTransferHelper.resolvePaths(
+            args: args,
+            validator: validator,
+            allowCaseOnlyOverwrite: false,
+            forbidMovingApprovedRoot: false
+        ) {
+        case .resolved(let resolved):
+            transfer = resolved
+        case .failure(let failureResult):
+            return failureResult
         }
-        
-        let resolvedSrc: String
-        switch validator.validate(path: src) {
-        case .success(let s): resolvedSrc = s
-        case .failure(let err): return ToolResult(success: false, message: "Source access denied: \(err.localizedDescription)")
-        }
-        
-        let resolvedDst: String
-        switch validator.validate(path: dst) {
-        case .success(let d): resolvedDst = d
-        case .failure(let err): return ToolResult(success: false, message: "Destination access denied: \(err.localizedDescription)")
-        }
-        
-        guard FileManager.default.fileExists(atPath: resolvedSrc) else {
-            return ToolResult(success: false, message: "Source file does not exist: \(resolvedSrc)")
-        }
-        if FileManager.default.fileExists(atPath: resolvedDst) {
-            return ToolResult(success: false, message: "Destination file already exists: \(resolvedDst)")
-        }
-        
+
+        let fm = FileManager.default
         do {
-            try FileManager.default.copyItem(atPath: resolvedSrc, toPath: resolvedDst)
-            
-            let undoAction: @Sendable () async throws -> Void = {
-                try? FileManager.default.removeItem(atPath: resolvedDst)
+            try fm.copyItem(atPath: transfer.source, toPath: transfer.destination)
+
+            guard PathProbe.entryExists(transfer.destination) else {
+                return ToolResult(
+                    success: false,
+                    message: "Copy could not be verified at '\(transfer.destination)'.",
+                    canonicalPath: transfer.destination
+                )
             }
-            
+
+            let dstPath = transfer.destination
+            let undoAction: @Sendable () async throws -> Void = {
+                if PathProbe.entryExists(dstPath) {
+                    try FileManager.default.removeItem(atPath: dstPath)
+                }
+            }
+
             return ToolResult(
                 success: true,
-                message: "Copied '\(resolvedSrc)' to '\(resolvedDst)'.",
-                undoAction: undoAction
+                message: "Copied '\(transfer.source)' to '\(transfer.destination)'.",
+                undoAction: undoAction,
+                errorCode: .completed,
+                canonicalPath: transfer.destination
             )
         } catch {
-            return ToolResult(success: false, message: "Failed to copy file: \(error.localizedDescription)")
+            return ToolResult(
+                success: false,
+                message: "Failed to copy file: \(error.localizedDescription)",
+                errorCode: FileToolErrorMapper.mapErrorCode(error),
+                canonicalPath: transfer.destination
+            )
         }
     }
 }
@@ -355,58 +561,78 @@ public final class MoveFileTool: PearlTool {
     public let tier = ToolTier.t3WorkspaceChanges
     public let requiredTCC: [TCCService] = []
     public let isReversible = true
-    
+
     public var argumentDescriptors: [ToolArgumentDescriptor] {
         return [
             ToolArgumentDescriptor(name: "source", type: "string", description: "Source file path", isRequired: true),
-            ToolArgumentDescriptor(name: "destination", type: "string", description: "Destination file path", isRequired: true)
+            ToolArgumentDescriptor(name: "destination", type: "string", description: "Destination file or folder path", isRequired: true),
+            ToolArgumentDescriptor(name: "confirm", type: "string", description: "Pass 'true' to confirm moving file", isRequired: false)
         ]
     }
-    
+
     public let validator: FolderAllowlistValidator
-    
+
     public init(validator: FolderAllowlistValidator = FolderAllowlistValidator()) {
         self.validator = validator
     }
-    
+
     public func execute(args: [String: String], context: ToolExecutionContext) async throws -> ToolResult {
-        guard let src = args["source"], let dst = args["destination"] else {
-            return ToolResult(success: false, message: "Missing required 'source' or 'destination' argument.")
+        let transfer: FileTransferHelper.ResolvedTransfer
+        switch FileTransferHelper.resolvePaths(
+            args: args,
+            validator: validator,
+            allowCaseOnlyOverwrite: true,
+            forbidMovingApprovedRoot: true
+        ) {
+        case .resolved(let resolved):
+            transfer = resolved
+        case .failure(let failureResult):
+            return failureResult
         }
-        
-        let resolvedSrc: String
-        switch validator.validate(path: src) {
-        case .success(let s): resolvedSrc = s
-        case .failure(let err): return ToolResult(success: false, message: "Source access denied: \(err.localizedDescription)")
-        }
-        
-        let resolvedDst: String
-        switch validator.validate(path: dst) {
-        case .success(let d): resolvedDst = d
-        case .failure(let err): return ToolResult(success: false, message: "Destination access denied: \(err.localizedDescription)")
-        }
-        
-        guard FileManager.default.fileExists(atPath: resolvedSrc) else {
-            return ToolResult(success: false, message: "Source file does not exist: \(resolvedSrc)")
-        }
-        if FileManager.default.fileExists(atPath: resolvedDst) {
-            return ToolResult(success: false, message: "Destination file already exists: \(resolvedDst)")
-        }
-        
+
+        let fm = FileManager.default
         do {
-            try FileManager.default.moveItem(atPath: resolvedSrc, toPath: resolvedDst)
-            
-            let undoAction: @Sendable () async throws -> Void = {
-                try? FileManager.default.moveItem(atPath: resolvedDst, toPath: resolvedSrc)
+            try fm.moveItem(atPath: transfer.source, toPath: transfer.destination)
+
+            let movedExists = PathProbe.entryExists(transfer.destination)
+            let isCaseOnly = transfer.source.lowercased() == transfer.destination.lowercased()
+            let sourceGone = isCaseOnly || !PathProbe.entryExists(transfer.source)
+
+            guard movedExists && sourceGone else {
+                return ToolResult(
+                    success: false,
+                    message: "Move operation could not be verified on disk at '\(transfer.destination)'.",
+                    canonicalPath: transfer.destination
+                )
             }
-            
+
+            let srcPath = transfer.source
+            let dstPath = transfer.destination
+            let undoAction: @Sendable () async throws -> Void = {
+                let fileManager = FileManager.default
+                guard PathProbe.entryExists(dstPath) else {
+                    throw SafeUndoError.targetMissing(dstPath)
+                }
+                if srcPath.lowercased() != dstPath.lowercased() && PathProbe.entryExists(srcPath) {
+                    throw SafeUndoError.destinationCollision(srcPath)
+                }
+                try fileManager.moveItem(atPath: dstPath, toPath: srcPath)
+            }
+
             return ToolResult(
                 success: true,
-                message: "Moved '\(resolvedSrc)' to '\(resolvedDst)'.",
-                undoAction: undoAction
+                message: "Moved '\(transfer.source)' to '\(transfer.destination)'.",
+                undoAction: undoAction,
+                errorCode: .completed,
+                canonicalPath: transfer.destination
             )
         } catch {
-            return ToolResult(success: false, message: "Failed to move file: \(error.localizedDescription)")
+            return ToolResult(
+                success: false,
+                message: "Failed to move file: \(error.localizedDescription)",
+                errorCode: FileToolErrorMapper.mapErrorCode(error),
+                canonicalPath: transfer.destination
+            )
         }
     }
 }
