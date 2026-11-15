@@ -109,9 +109,7 @@ public final class SubagentReportLedger: @unchecked Sendable {
         if let dir = reportsDirectory {
             self.reportsDirectory = dir
         } else {
-            let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
-                ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support")
-            self.reportsDirectory = base.appendingPathComponent("Pearl/reports")
+            self.reportsDirectory = PearlStoragePaths.subdirectory(named: "reports")
         }
         try? FileManager.default.createDirectory(at: self.reportsDirectory, withIntermediateDirectories: true)
     }

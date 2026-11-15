@@ -130,6 +130,7 @@ public final class FallbackChain: Sendable {
         lines.append("")
         lines.append("Available offline actions:")
         lines.append("Pearl can still run deterministic actions without any model:")
+        lines.append("• Folders & files (\"create folder Research on Desktop\", \"list files in Downloads\")")
         lines.append("• Volume control (\"mute\", \"set volume to 50\")")
         lines.append("• Battery status (\"check battery\")")
         lines.append("• App management (\"open Safari\", \"close Spotify\")")

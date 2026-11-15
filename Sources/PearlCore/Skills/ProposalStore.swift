@@ -141,11 +141,7 @@ public final class ProposalStore: @unchecked Sendable {
     public static let shared = ProposalStore()
     
     public static var defaultQueueFileURL: URL {
-        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        return appSupport
-            .appendingPathComponent("Pearl", isDirectory: true)
-            .appendingPathComponent("proposals", isDirectory: true)
-            .appendingPathComponent("queue.json")
+        return PearlStoragePaths.subdirectory(named: "proposals").appendingPathComponent("queue.json")
     }
     
     public let queueFileURL: URL

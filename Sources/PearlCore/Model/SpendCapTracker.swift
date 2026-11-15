@@ -21,11 +21,13 @@ public final class SpendCapTracker: @unchecked Sendable {
     private var maxTokensPerTurn: Int
     private var currentMonthSpendUSD: Double = 0.0
     private var currentMonthKey: String = ""
+    private let customStateFileURL: URL?
     private let lock = NSLock()
     
-    public init(monthlyCapUSD: Double = 10.0, maxTokensPerTurn: Int = 4096) {
+    public init(monthlyCapUSD: Double = 10.0, maxTokensPerTurn: Int = 4096, stateFileURL: URL? = nil) {
         self.monthlyCapUSD = monthlyCapUSD
         self.maxTokensPerTurn = maxTokensPerTurn
+        self.customStateFileURL = stateFileURL
         self.currentMonthKey = SpendCapTracker.currentMonthIdentifier()
         loadPersistedSpend()
     }
@@ -120,10 +122,10 @@ public final class SpendCapTracker: @unchecked Sendable {
     }
     
     private var stateFileURL: URL {
-        let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-            .appendingPathComponent("Pearl", isDirectory: true)
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        return dir.appendingPathComponent("spend_tracker.json")
+        if let customStateFileURL = customStateFileURL {
+            return customStateFileURL
+        }
+        return PearlStoragePaths.fileURL(named: "spend_tracker.json")
     }
     
     private func loadPersistedSpend() {

@@ -12,10 +12,9 @@ public actor MemoryStore {
     
     public private(set) var ftsIndex: FTSIndex
     
-    public static let defaultBaseDirectory: URL = {
-        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        return appSupport.appendingPathComponent("Pearl")
-    }()
+    public static var defaultBaseDirectory: URL {
+        return PearlStoragePaths.supportDirectory
+    }
     
     public static let defaultPersona: String = """
     # Pearl Assistant Persona

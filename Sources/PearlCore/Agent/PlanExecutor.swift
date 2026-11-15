@@ -225,8 +225,10 @@ public final class PlanExecutor: @unchecked Sendable {
                 return job
             }
             
-            // 3. Lookup tool in toolRegistry
-            guard let tool = toolRegistry.tool(named: step.toolName) else {
+            // 3. Lookup tool in toolRegistry (falling back to CentralToolCatalog only on .shared)
+            let resolvedTool = toolRegistry.tool(named: step.toolName) ??
+                (toolRegistry === ToolRegistry.shared ? CentralToolCatalog.shared.tool(named: step.toolName) : nil)
+            guard let tool = resolvedTool else {
                 step.status = .failed
                 step.resultMessage = "Tool not found in registry: \(step.toolName)"
                 job.steps[i] = step
@@ -245,13 +247,56 @@ public final class PlanExecutor: @unchecked Sendable {
                 let approvals = await approvalQueue.listAll()
                 if let matchingApproval = approvals.last(where: { $0.jobId == job.id && $0.toolName == step.toolName }) {
                     if matchingApproval.status == .approved {
-                        step.status = .completed
-                        step.resultMessage = "Approved and executed via ApprovalQueue"
-                        job.steps[i] = step
-                        job.currentStepIndex += 1
-                        job.updatedAt = Date()
-                        try await jobStore.updateJob(job)
-                        continue
+                        if matchingApproval.executionSucceeded == true {
+                            step.status = .completed
+                            step.resultMessage = matchingApproval.executionMessage ?? "Approved and executed via ApprovalQueue"
+                            job.steps[i] = step
+                            job.currentStepIndex += 1
+                            job.updatedAt = Date()
+                            try await jobStore.updateJob(job)
+                            appendStepLedger(job: job, index: i, step: step, startedAt: stepStart)
+                            continue
+                        } else if matchingApproval.executionSucceeded == false {
+                            step.status = .failed
+                            step.resultMessage = matchingApproval.executionMessage ?? "Approved step failed during execution"
+                            job.steps[i] = step
+                            job.status = .failed
+                            job.errorMessage = step.resultMessage
+                            job.updatedAt = Date()
+                            try await jobStore.updateJob(job)
+                            appendStepLedger(job: job, index: i, step: step, startedAt: stepStart)
+                            return job
+                        } else {
+                            // Approved status recorded without prior execution outcome -> execute now with userConfirmed
+                            let confirmedCtx = ToolExecutionContext(
+                                trustState: .trusted,
+                                userConfirmed: true,
+                                providerIsLocal: context.providerIsLocal,
+                                taintState: context.taintState,
+                                freshConfirmationArgs: step.arguments
+                            )
+                            let execRes = try await policyEngine.execute(tool: tool, args: step.arguments, context: confirmedCtx)
+                            if execRes.success {
+                                step.status = .completed
+                                step.resultMessage = execRes.message
+                                job.steps[i] = step
+                                job.currentStepIndex += 1
+                                job.updatedAt = Date()
+                                try await jobStore.updateJob(job)
+                                appendStepLedger(job: job, index: i, step: step, startedAt: stepStart)
+                                continue
+                            } else {
+                                step.status = .failed
+                                step.resultMessage = execRes.message
+                                job.steps[i] = step
+                                job.status = .failed
+                                job.errorMessage = execRes.message
+                                job.updatedAt = Date()
+                                try await jobStore.updateJob(job)
+                                appendStepLedger(job: job, index: i, step: step, startedAt: stepStart)
+                                return job
+                            }
+                        }
                     } else if matchingApproval.status == .denied {
                         step.status = .failed
                         step.resultMessage = "Approval denied: \(matchingApproval.reason)"
@@ -260,6 +305,7 @@ public final class PlanExecutor: @unchecked Sendable {
                         job.errorMessage = "Approval denied: \(matchingApproval.reason)"
                         job.updatedAt = Date()
                         try await jobStore.updateJob(job)
+                        appendStepLedger(job: job, index: i, step: step, startedAt: stepStart)
                         return job
                     }
                 }

@@ -282,7 +282,7 @@ final class CacheAndTelemetryTests: XCTestCase {
     // MARK: - 12. PearlConfig V3.2 Round-Trip Encoding
     func testPearlConfigV32RoundTripEncoding() throws {
         var original = PearlConfig()
-        XCTAssertEqual(original.version, "3.2.0")
+        XCTAssertEqual(original.version, PearlConfig.currentVersion)
         XCTAssertEqual(original.activePersona, "executive")
         XCTAssertEqual(original.subBotMaxConcurrency, 4)
         XCTAssertNil(original.firecrawlApiKey)
@@ -299,7 +299,7 @@ final class CacheAndTelemetryTests: XCTestCase {
         
         let decoded = try JSONDecoder().decode(PearlConfig.self, from: encodedData)
         
-        XCTAssertEqual(decoded.version, "3.2.0")
+        XCTAssertEqual(decoded.version, PearlConfig.currentVersion)
         XCTAssertEqual(decoded.activePersona, "researcher")
         XCTAssertEqual(decoded.vaultPath, "/custom/vault/path")
         XCTAssertEqual(decoded.outputDirectoryPath, "/custom/output/path")

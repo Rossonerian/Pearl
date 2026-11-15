@@ -71,13 +71,19 @@ public struct ToolMetadata: Sendable {
 /// Central catalog providing a single source of truth for all registered tools,
 /// schemas, tiers, reversibility guarantees, and interface exposure policies.
 public final class CentralToolCatalog: @unchecked Sendable {
-    public static let shared = CentralToolCatalog()
+    public static let shared = CentralToolCatalog(isSharedInstance: true)
     
     private var tools: [String: any PearlTool] = [:]
     private var metadataMap: [String: ToolMetadata] = [:]
     private let lock = NSLock()
+    private let isSharedInstance: Bool
     
-    public init() {
+    public convenience init() {
+        self.init(isSharedInstance: false)
+    }
+    
+    private init(isSharedInstance: Bool) {
+        self.isSharedInstance = isSharedInstance
         registerCanonicalMetadata()
         registerDefaultCoreTools()
     }
@@ -220,10 +226,77 @@ public final class CentralToolCatalog: @unchecked Sendable {
             
             // Expanded macOS Capability Tools (V3.1 - mcpExposed: false)
             ToolMetadata(
+                name: "create_directory",
+                description: "Create a new folder at the specified approved path with verification and safe empty-only undo",
+                arguments: [
+                    ToolArgumentDescriptor(name: "path", description: "Absolute or user-relative target directory path (e.g. ~/Desktop/Pearl)", isRequired: true),
+                    ToolArgumentDescriptor(name: "recursive", description: "Create missing intermediate parent directories ('true'/'false')"),
+                    ToolArgumentDescriptor(name: "create_if_missing", description: "Idempotently succeed if directory already exists ('true'/'false')")
+                ],
+                tier: .t3WorkspaceChanges,
+                requiredTCC: [],
+                isReversible: true,
+                requiresConfirmation: false,
+                supportsUndo: true,
+                nativeAssistantExposed: true,
+                cliExposed: true,
+                mcpExposed: false
+            ),
+            ToolMetadata(
+                name: "list_directory",
+                description: "List files and folders inside an approved directory with optional recursion, limit, and filtering",
+                arguments: [
+                    ToolArgumentDescriptor(name: "path", description: "Target directory path (e.g. ~/Desktop)", isRequired: true),
+                    ToolArgumentDescriptor(name: "recursive", description: "List subdirectories recursively ('true'/'false', default 'false')"),
+                    ToolArgumentDescriptor(name: "limit", description: "Maximum number of entries to return (default 50, max 200)"),
+                    ToolArgumentDescriptor(name: "filter", description: "Entry type or substring filter ('all', 'folders', 'files', or extension/substring)")
+                ],
+                tier: .t0Observe,
+                requiredTCC: [],
+                isReversible: false,
+                requiresConfirmation: false,
+                nativeAssistantExposed: true,
+                cliExposed: true,
+                mcpExposed: false
+            ),
+            ToolMetadata(
+                name: "rename_file",
+                description: "Rename a file or folder within approved directories with collision detection and undo support",
+                arguments: [
+                    ToolArgumentDescriptor(name: "source", description: "Existing file or directory path", isRequired: true),
+                    ToolArgumentDescriptor(name: "destination", description: "New path or new name in same parent directory", isRequired: true),
+                    ToolArgumentDescriptor(name: "confirm", description: "Pass 'true' to confirm rename")
+                ],
+                tier: .t3WorkspaceChanges,
+                requiredTCC: [],
+                isReversible: true,
+                requiresConfirmation: true,
+                supportsUndo: true,
+                nativeAssistantExposed: true,
+                cliExposed: true,
+                mcpExposed: false
+            ),
+            ToolMetadata(
+                name: "trash_file",
+                description: "Safely move a file or folder to macOS Trash (reversible, confirmation required)",
+                arguments: [
+                    ToolArgumentDescriptor(name: "path", description: "Path of file or directory to move to Trash", isRequired: true),
+                    ToolArgumentDescriptor(name: "confirm", description: "Pass 'true' to confirm moving target to Trash")
+                ],
+                tier: .t3WorkspaceChanges,
+                requiredTCC: [],
+                isReversible: true,
+                requiresConfirmation: true,
+                supportsUndo: true,
+                nativeAssistantExposed: true,
+                cliExposed: true,
+                mcpExposed: false
+            ),
+            ToolMetadata(
                 name: "search_files",
                 description: "Search allowed directories for files matching substring or extension",
                 arguments: [
-                    ToolArgumentDescriptor(name: "query", description: "Filename substring to search for", isRequired: true),
+                    ToolArgumentDescriptor(name: "query", description: "Filename substring to search for"),
                     ToolArgumentDescriptor(name: "folder", description: "Folder within allowed directories"),
                     ToolArgumentDescriptor(name: "extension", description: "File extension filter without dot")
                 ],
@@ -270,12 +343,30 @@ public final class CentralToolCatalog: @unchecked Sendable {
                 description: "Move a file between allowed folders with undo support (workspace change)",
                 arguments: [
                     ToolArgumentDescriptor(name: "source", description: "Source file path", isRequired: true),
-                    ToolArgumentDescriptor(name: "destination", description: "Destination file path", isRequired: true)
+                    ToolArgumentDescriptor(name: "destination", description: "Destination file or folder path", isRequired: true),
+                    ToolArgumentDescriptor(name: "confirm", description: "Pass 'true' to confirm moving file")
                 ],
                 tier: .t3WorkspaceChanges,
                 requiredTCC: [],
                 isReversible: true,
                 requiresConfirmation: true,
+                supportsUndo: true,
+                nativeAssistantExposed: true,
+                cliExposed: true,
+                mcpExposed: false
+            ),
+            ToolMetadata(
+                name: "reminder",
+                description: "Create, list, or complete reminders in Pearl/EventKit",
+                arguments: [
+                    ToolArgumentDescriptor(name: "action", description: "Action: create, list, or complete (default create)", allowedValues: ["create", "list", "complete"]),
+                    ToolArgumentDescriptor(name: "title", description: "Reminder title (required for create/complete)"),
+                    ToolArgumentDescriptor(name: "id", description: "Reminder ID prefix or UUID (for complete)")
+                ],
+                tier: .t1Reversible,
+                requiredTCC: [.reminders],
+                isReversible: true,
+                requiresConfirmation: false,
                 supportsUndo: true,
                 nativeAssistantExposed: true,
                 cliExposed: true,
@@ -623,7 +714,6 @@ public final class CentralToolCatalog: @unchecked Sendable {
     
     public func register(_ tool: any PearlTool, metadata: ToolMetadata? = nil) {
         lock.lock()
-        defer { lock.unlock() }
         let key = tool.name.lowercased()
         tools[key] = tool
         let meta = metadata ?? metadataMap[key] ?? ToolMetadata(
@@ -640,7 +730,31 @@ public final class CentralToolCatalog: @unchecked Sendable {
             mcpExposed: tool.tier <= .t2ReadPersonal
         )
         metadataMap[key] = meta
-        ToolRegistry.shared.register(tool)
+        lock.unlock()
+        if isSharedInstance {
+            ToolRegistry.shared.register(tool)
+        }
+    }
+    
+    /// Registers an array of tools atomically into the catalog (and shared ToolRegistry when on `.shared`).
+    public func registerAll(_ tools: [any PearlTool]) {
+        for tool in tools {
+            register(tool)
+        }
+    }
+    
+    /// Returns all sorted registered tool names.
+    public func allToolNames() -> [String] {
+        lock.lock()
+        defer { lock.unlock() }
+        return tools.keys.sorted()
+    }
+    
+    /// Returns all canonical metadata entries.
+    public func allMetadata() -> [ToolMetadata] {
+        lock.lock()
+        defer { lock.unlock() }
+        return metadataMap.values.sorted { $0.name < $1.name }
     }
     
     public func tool(named name: String) -> (any PearlTool)? {
@@ -658,7 +772,7 @@ public final class CentralToolCatalog: @unchecked Sendable {
     public func allTools() -> [any PearlTool] {
         lock.lock()
         defer { lock.unlock() }
-        return Array(tools.values)
+        return Array(tools.values).sorted { $0.name < $1.name }
     }
     
     public func exposedTools(for interface: InterfaceType) -> [any PearlTool] {
@@ -671,12 +785,83 @@ public final class CentralToolCatalog: @unchecked Sendable {
             case .cli: return meta.cliExposed
             case .mcp: return meta.mcpExposed && meta.tier <= .t2ReadPersonal
             }
+        }.sorted { $0.name < $1.name }
+    }
+    
+    /// Audits runtime consistency between `CentralToolCatalog` and a `ToolRegistry`.
+    public func auditConsistency(against registry: ToolRegistry = .shared) -> ToolConsistencyAuditReport {
+        lock.lock()
+        let catalogTools = tools
+        let metas = metadataMap
+        lock.unlock()
+        
+        let registryTools = Dictionary(uniqueKeysWithValues: registry.allTools().map { ($0.name.lowercased(), $0) })
+        let catalogNames = Set(catalogTools.keys)
+        let registryNames = Set(registryTools.keys)
+        
+        let missingFromRegistry = catalogNames.subtracting(registryNames).sorted()
+        let missingFromCatalog = registryNames.subtracting(catalogNames).sorted()
+        let metadataWithoutImpl = Set(metas.keys).subtracting(catalogNames).sorted()
+        
+        var tierMismatches: [String] = []
+        var descriptorMismatches: [String] = []
+        var mcpViolations: [String] = []
+        
+        for (key, tool) in catalogTools.sorted(by: { $0.key < $1.key }) {
+            if let meta = metas[key] {
+                if tool.tier != meta.tier {
+                    tierMismatches.append("\(tool.name): tool=\(tool.tier), metadata=\(meta.tier)")
+                }
+                if meta.mcpExposed && (tool.tier > .t2ReadPersonal || meta.tier > .t2ReadPersonal) {
+                    mcpViolations.append("\(tool.name): tier \(tool.tier) exposed via MCP")
+                }
+                if !tool.argumentDescriptors.isEmpty && !meta.arguments.isEmpty {
+                    let toolReq = Set(tool.argumentDescriptors.filter(\.isRequired).map(\.name))
+                    let metaReq = Set(meta.arguments.filter(\.isRequired).map(\.name))
+                    if toolReq != metaReq {
+                        descriptorMismatches.append("\(tool.name): tool required=\(toolReq.sorted()), meta required=\(metaReq.sorted())")
+                    }
+                }
+            }
         }
+        
+        return ToolConsistencyAuditReport(
+            catalogCount: catalogNames.count,
+            registryCount: registryNames.count,
+            missingFromToolRegistry: missingFromRegistry,
+            missingFromCatalog: missingFromCatalog,
+            metadataWithoutImplementation: metadataWithoutImpl,
+            tierMismatches: tierMismatches,
+            descriptorMismatches: descriptorMismatches,
+            mcpViolations: mcpViolations
+        )
     }
     
     public enum InterfaceType: Sendable {
         case nativeAssistant
         case cli
         case mcp
+    }
+}
+
+/// Runtime diagnostic report comparing tool registration, schemas, tiers, and interface boundaries.
+public struct ToolConsistencyAuditReport: Sendable, Codable, Equatable {
+    public let catalogCount: Int
+    public let registryCount: Int
+    public let missingFromToolRegistry: [String]
+    public let missingFromCatalog: [String]
+    public let metadataWithoutImplementation: [String]
+    public let tierMismatches: [String]
+    public let descriptorMismatches: [String]
+    public let mcpViolations: [String]
+    
+    public var isHealthy: Bool {
+        return catalogCount > 0 &&
+            missingFromToolRegistry.isEmpty &&
+            missingFromCatalog.isEmpty &&
+            metadataWithoutImplementation.isEmpty &&
+            tierMismatches.isEmpty &&
+            descriptorMismatches.isEmpty &&
+            mcpViolations.isEmpty
     }
 }

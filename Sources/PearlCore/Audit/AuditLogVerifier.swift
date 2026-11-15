@@ -218,10 +218,9 @@ public final class AuditLogVerifier: Sendable {
         return .success(totalRecords: totalRecords, verifiedFiles: verifiedFiles)
     }
     
-    /// Verifies the system default Pearl audit logs in `~/Library/Application Support/Pearl`.
+    /// Verifies the default Pearl audit logs in Pearl's storage directory.
     public func verifyDefaultAuditLogs() -> AuditVerificationResult {
-        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        let pearlDir = appSupport.appendingPathComponent("Pearl", isDirectory: true)
+        let pearlDir = PearlStoragePaths.supportDirectory
         let auditDir = pearlDir.appendingPathComponent("audit", isDirectory: true)
         
         if FileManager.default.fileExists(atPath: auditDir.path) {

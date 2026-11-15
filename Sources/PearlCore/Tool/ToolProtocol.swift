@@ -49,22 +49,43 @@ public struct ToolExecutionContext: Sendable {
     }
 }
 
+/// Canonical error and outcome taxonomy for Pearl tool execution and UX reporting.
+public enum PearlToolErrorCode: String, Codable, Sendable, Equatable {
+    case completed = "completed"
+    case partiallyCompleted = "partially_completed"
+    case toolNotImplemented = "tool_not_implemented"
+    case toolNotRegistered = "tool_not_registered"
+    case invalidArguments = "invalid_arguments"
+    case permissionDenied = "permission_denied"
+    case outsideApprovedFolders = "outside_approved_folders"
+    case alreadyExists = "already_exists"
+    case parentMissing = "parent_missing"
+    case macOSAuthorizationUnavailable = "macos_authorization_unavailable"
+    case executionTimeout = "execution_timeout"
+}
+
 public struct ToolResult: Sendable {
     public let success: Bool
     public let message: String
     public let trust: TrustLevel
     public let undoAction: (@Sendable () async throws -> Void)?
+    public let errorCode: PearlToolErrorCode?
+    public let canonicalPath: String?
     
     public init(
         success: Bool,
         message: String,
         trust: TrustLevel = .trusted,
-        undoAction: (@Sendable () async throws -> Void)? = nil
+        undoAction: (@Sendable () async throws -> Void)? = nil,
+        errorCode: PearlToolErrorCode? = nil,
+        canonicalPath: String? = nil
     ) {
         self.success = success
         self.message = message
         self.trust = trust
         self.undoAction = undoAction
+        self.errorCode = errorCode
+        self.canonicalPath = canonicalPath
     }
 }
 

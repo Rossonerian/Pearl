@@ -77,10 +77,7 @@ public actor SkillEngine {
     public static let shared = SkillEngine()
     
     public static var defaultSkillsDirectory: URL {
-        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        return appSupport
-            .appendingPathComponent("Pearl", isDirectory: true)
-            .appendingPathComponent("skills", isDirectory: true)
+        return PearlStoragePaths.subdirectory(named: "skills")
     }
     
     public static let builtInCatalog: [CatalogSkillBlueprint] = [

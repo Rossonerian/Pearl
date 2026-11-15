@@ -106,6 +106,10 @@ public final class FrontierProvider: ModelProvider, @unchecked Sendable {
         if let temp = context.temperature {
             payload["temperature"] = temp
         }
+        let toolSchemas = Self.buildAnthropicToolSchemas()
+        if !toolSchemas.isEmpty {
+            payload["tools"] = toolSchemas
+        }
         
         guard let httpBody = try? JSONSerialization.data(withJSONObject: payload) else {
             throw FrontierError.invalidResponse("Failed to serialize request payload.")
@@ -137,9 +141,25 @@ public final class FrontierProvider: ModelProvider, @unchecked Sendable {
         }
         
         var responseText = ""
+        var parsedToolCalls: [ModelToolCall] = []
         if let contentBlocks = json["content"] as? [[String: Any]] {
             for block in contentBlocks {
-                if let text = block["text"] as? String {
+                let blockType = block["type"] as? String
+                if blockType == "tool_use",
+                   let toolName = block["name"] as? String {
+                    let rawInput = block["input"] as? [String: Any] ?? [:]
+                    var stringArgs: [String: String] = [:]
+                    for (k, v) in rawInput {
+                        if let s = v as? String {
+                            stringArgs[k] = s
+                        } else if let b = v as? Bool {
+                            stringArgs[k] = b ? "true" : "false"
+                        } else if let n = v as? NSNumber {
+                            stringArgs[k] = n.stringValue
+                        }
+                    }
+                    parsedToolCalls.append(ModelToolCall(toolName: toolName, arguments: stringArgs))
+                } else if let text = block["text"] as? String {
                     responseText += text
                 }
             }
@@ -166,13 +186,46 @@ public final class FrontierProvider: ModelProvider, @unchecked Sendable {
         
         return ModelResponse(
             content: responseText,
-            toolCalls: [],
+            toolCalls: parsedToolCalls,
             usage: tokenUsage,
             providerName: name,
             modelID: activeModelID,
             isLocal: false,
             badge: badge
         )
+    }
+    
+    private static func buildAnthropicToolSchemas() -> [[String: Any]] {
+        let exposed = CentralToolCatalog.shared.exposedTools(for: .nativeAssistant)
+        return exposed.map { tool in
+            let meta = CentralToolCatalog.shared.metadata(for: tool.name)
+            let descriptors = meta?.arguments ?? tool.argumentDescriptors
+            var properties: [String: [String: Any]] = [:]
+            var required: [String] = []
+            for desc in descriptors {
+                var prop: [String: Any] = [
+                    "type": "string",
+                    "description": desc.description
+                ]
+                if let allowed = desc.allowedValues, !allowed.isEmpty {
+                    prop["enum"] = allowed
+                }
+                properties[desc.name] = prop
+                if desc.isRequired {
+                    required.append(desc.name)
+                }
+            }
+            let schema: [String: Any] = [
+                "type": "object",
+                "properties": properties,
+                "required": required
+            ]
+            return [
+                "name": tool.name,
+                "description": meta?.description ?? tool.description,
+                "input_schema": schema
+            ]
+        }
     }
     
     public func stream(prompt: String, context: ModelExecutionContext = ModelExecutionContext()) -> AsyncThrowingStream<String, Error> {

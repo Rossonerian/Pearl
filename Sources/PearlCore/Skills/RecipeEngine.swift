@@ -43,10 +43,7 @@ public final class RecipeEngine: @unchecked Sendable {
     public static let shared = RecipeEngine()
     
     public static var defaultRecipesDirectory: URL {
-        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        return appSupport
-            .appendingPathComponent("Pearl", isDirectory: true)
-            .appendingPathComponent("recipes", isDirectory: true)
+        return PearlStoragePaths.subdirectory(named: "recipes")
     }
     
     public let recipesDirectory: URL

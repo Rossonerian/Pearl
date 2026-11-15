@@ -334,9 +334,7 @@ public final class SubBotManager: @unchecked Sendable {
         if let monitorsFileURL = monitorsFileURL {
             self.monitorsFileURL = monitorsFileURL
         } else {
-            let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
-                ?? URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Library/Application Support")
-            self.monitorsFileURL = appSupport.appendingPathComponent("Pearl/subbots/monitors.json")
+            self.monitorsFileURL = PearlStoragePaths.subdirectory(named: "subbots").appendingPathComponent("monitors.json")
         }
         
         self.firecrawlApiKey = firecrawlApiKey

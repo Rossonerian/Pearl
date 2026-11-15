@@ -15,6 +15,8 @@ public struct PendingApproval: Codable, Sendable, Identifiable, Equatable {
     public let reason: String
     public let createdAt: Date
     public var status: ApprovalStatus
+    public var executionSucceeded: Bool?
+    public var executionMessage: String?
     
     public init(
         id: String = UUID().uuidString,
@@ -24,7 +26,9 @@ public struct PendingApproval: Codable, Sendable, Identifiable, Equatable {
         tier: ToolTier,
         reason: String,
         createdAt: Date = Date(),
-        status: ApprovalStatus = .pending
+        status: ApprovalStatus = .pending,
+        executionSucceeded: Bool? = nil,
+        executionMessage: String? = nil
     ) {
         self.id = id
         self.jobId = jobId
@@ -34,6 +38,8 @@ public struct PendingApproval: Codable, Sendable, Identifiable, Equatable {
         self.reason = reason
         self.createdAt = createdAt
         self.status = status
+        self.executionSucceeded = executionSucceeded
+        self.executionMessage = executionMessage
     }
 }
 
@@ -74,12 +80,7 @@ public actor ApprovalQueue {
         if let storageURL = storageURL {
             url = storageURL
         } else {
-            let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-            let dir = appSupport.appendingPathComponent("Pearl", isDirectory: true)
-            try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true, attributes: [
-                .posixPermissions: 0o700
-            ])
-            url = dir.appendingPathComponent("approvals.json")
+            url = PearlStoragePaths.fileURL(named: "approvals.json")
         }
         self.storageURL = url
         self.policyEngine = policyEngine
@@ -143,7 +144,9 @@ public actor ApprovalQueue {
         guard item.status == .pending else {
             throw ApprovalQueueError.alreadyResolved(id)
         }
-        guard let tool = toolRegistry.tool(named: item.toolName) else {
+        let resolvedTool = toolRegistry.tool(named: item.toolName) ??
+            (toolRegistry === ToolRegistry.shared ? CentralToolCatalog.shared.tool(named: item.toolName) : nil)
+        guard let tool = resolvedTool else {
             throw ApprovalQueueError.toolNotFound(item.toolName)
         }
         
@@ -156,6 +159,8 @@ public actor ApprovalQueue {
         let result = try await policyEngine.execute(tool: tool, args: item.arguments, context: context)
         
         items[index].status = .approved
+        items[index].executionSucceeded = result.success
+        items[index].executionMessage = result.message
         try save()
         
         return result

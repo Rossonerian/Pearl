@@ -1,5 +1,31 @@
 import Foundation
 
+/// Pending clarification state when a user request is missing a required detail (e.g. destination folder).
+public struct PendingClarification: Sendable, Codable, Equatable {
+    public let kind: String
+    public let prompt: String
+    public let targets: [String]
+    public let newName: String?
+    public let sourcePath: String?
+    public let createdAt: Date
+    
+    public init(
+        kind: String,
+        prompt: String,
+        targets: [String],
+        newName: String? = nil,
+        sourcePath: String? = nil,
+        createdAt: Date = Date()
+    ) {
+        self.kind = kind
+        self.prompt = prompt
+        self.targets = targets
+        self.newName = newName
+        self.sourcePath = sourcePath
+        self.createdAt = createdAt
+    }
+}
+
 /// Session performance and activity metrics for Pearl conversation sessions.
 public struct SessionMetrics: Sendable, Codable, Equatable {
     public let sessionID: String
@@ -64,6 +90,7 @@ public actor SessionManager {
     }
     
     private var sessions: [String: SessionState] = [:]
+    private var pendingClarifications: [String: PendingClarification] = [:]
     private let config: Configuration
     
     public init(config: Configuration = Configuration()) {
@@ -157,9 +184,30 @@ public actor SessionManager {
         )
     }
     
+    /// Sets a pending clarification for a session.
+    public func setPendingClarification(_ clarification: PendingClarification, sessionID: String = "default") {
+        pendingClarifications[sessionID] = clarification
+    }
+    
+    /// Returns and optionally clears the active pending clarification for a session (expires after 5 minutes).
+    public func getPendingClarification(sessionID: String = "default") -> PendingClarification? {
+        guard let item = pendingClarifications[sessionID] else { return nil }
+        if Date().timeIntervalSince(item.createdAt) > 300 {
+            pendingClarifications.removeValue(forKey: sessionID)
+            return nil
+        }
+        return item
+    }
+    
+    /// Clears any pending clarification for a session.
+    public func clearPendingClarification(sessionID: String = "default") {
+        pendingClarifications.removeValue(forKey: sessionID)
+    }
+    
     /// Clears turns for a specific session.
     public func clearSession(sessionID: String = "default") {
         sessions.removeValue(forKey: sessionID)
+        pendingClarifications.removeValue(forKey: sessionID)
     }
     
     /// Returns all tracked session IDs.
@@ -170,5 +218,6 @@ public actor SessionManager {
     /// Resets all sessions.
     public func resetAll() {
         sessions.removeAll()
+        pendingClarifications.removeAll()
     }
 }

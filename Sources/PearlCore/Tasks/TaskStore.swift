@@ -21,14 +21,9 @@ public enum TaskStoreError: Error, LocalizedError, Sendable {
 /// Zero external dependencies beyond SQLite3.
 /// Default location: ~/Library/Application Support/Pearl/tasks.sqlite
 public actor TaskStore {
-    public static let defaultDatabaseURL: URL = {
-        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        let pearlDir = appSupport.appendingPathComponent("Pearl", isDirectory: true)
-        try? FileManager.default.createDirectory(at: pearlDir, withIntermediateDirectories: true, attributes: [
-            .posixPermissions: 0o700
-        ])
-        return pearlDir.appendingPathComponent("tasks.sqlite")
-    }()
+    public static var defaultDatabaseURL: URL {
+        return PearlStoragePaths.fileURL(named: "tasks.sqlite")
+    }
     
     public static let shared: TaskStore = {
         do {

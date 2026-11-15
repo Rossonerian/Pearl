@@ -97,14 +97,9 @@ public enum JobStoreError: Error, LocalizedError, Sendable {
 }
 
 public actor JobStore {
-    public static let defaultDatabaseURL: URL = {
-        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        let pearlDir = appSupport.appendingPathComponent("Pearl", isDirectory: true)
-        try? FileManager.default.createDirectory(at: pearlDir, withIntermediateDirectories: true, attributes: [
-            .posixPermissions: 0o700
-        ])
-        return pearlDir.appendingPathComponent("jobs.sqlite")
-    }()
+    public static var defaultDatabaseURL: URL {
+        return PearlStoragePaths.fileURL(named: "jobs.sqlite")
+    }
     
     public static let shared: JobStore = {
         do {

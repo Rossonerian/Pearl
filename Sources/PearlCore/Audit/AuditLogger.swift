@@ -77,9 +77,8 @@ public actor AuditLogger {
     public private(set) var isChainCorrupted: Bool = false
     public private(set) var chainIntegrityError: String? = nil
     
-    public init() {
-        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        let dir = appSupport.appendingPathComponent("Pearl", isDirectory: true)
+    public init(directory: URL? = nil) {
+        let dir = directory ?? PearlStoragePaths.supportDirectory
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true, attributes: [
             .posixPermissions: 0o700
         ])

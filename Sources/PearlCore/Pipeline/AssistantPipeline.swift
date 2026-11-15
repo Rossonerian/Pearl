@@ -51,6 +51,11 @@ public struct AssistantResponse: Sendable {
     public let toolResults: [ToolResult]
     public let memoryUpdated: Bool
     public let outputDecision: OutputDecision?
+    public let requiresConfirmation: Bool
+    public let confirmationToolName: String?
+    public let confirmationArguments: [String: String]?
+    public let confirmationReason: String?
+    public let needsClarification: Bool
     
     public init(
         id: String,
@@ -61,7 +66,12 @@ public struct AssistantResponse: Sendable {
         latencyMs: Double,
         toolResults: [ToolResult] = [],
         memoryUpdated: Bool = false,
-        outputDecision: OutputDecision? = nil
+        outputDecision: OutputDecision? = nil,
+        requiresConfirmation: Bool = false,
+        confirmationToolName: String? = nil,
+        confirmationArguments: [String: String]? = nil,
+        confirmationReason: String? = nil,
+        needsClarification: Bool = false
     ) {
         self.id = id
         self.success = success
@@ -72,6 +82,11 @@ public struct AssistantResponse: Sendable {
         self.toolResults = toolResults
         self.memoryUpdated = memoryUpdated
         self.outputDecision = outputDecision
+        self.requiresConfirmation = requiresConfirmation
+        self.confirmationToolName = confirmationToolName
+        self.confirmationArguments = confirmationArguments
+        self.confirmationReason = confirmationReason
+        self.needsClarification = needsClarification
     }
 }
 
@@ -198,27 +213,30 @@ public final class AssistantPipeline: @unchecked Sendable {
         
         // 4. Resolve cancellation and negation
         let lower = trimmed.lowercased()
-        let negationPatterns = ["don't", "dont", "do not", "never mind", "cancel that", "abort", "ignore that", "stop"]
-        for neg in negationPatterns {
-            if lower == neg || lower.hasPrefix(neg + " ") || lower.hasSuffix(" " + neg) || lower.contains(" " + neg + " ") {
-                if neg == "abort" || neg == "stop" || neg == "cancel that" {
-                    KillSwitch.shared.trigger(reason: "User verbal cancellation: '\(neg)'")
-                }
-                let resp = "Action cancelled."
-                let decision = OutputDirector.shared.decide(
-                    responseText: resp,
-                    origin: request.origin
-                )
-                return AssistantResponse(
-                    id: request.id,
-                    success: true,
-                    responseText: resp,
-                    speechText: decision.spokenText ?? "",
-                    badge: HUDTurnBadge(label: "cancelled", provider: "Guard", modelID: "negation", isLocal: true),
-                    latencyMs: elapsedMs(),
-                    outputDecision: decision
-                )
+        let negationPatterns = ["don't", "dont", "do not", "never mind", "cancel that", "cancel it", "abort", "ignore that", "stop"]
+        let isExactCancel = (lower == "cancel" || lower == "no" || lower == "nope")
+        let isMatchedNegation = negationPatterns.contains { neg in
+            lower == neg || lower.hasPrefix(neg + " ") || lower.hasSuffix(" " + neg) || lower.contains(" " + neg + " ")
+        }
+        if isExactCancel || isMatchedNegation {
+            await sessionManager.clearPendingClarification(sessionID: request.sessionID)
+            if lower.contains("abort") || lower.contains("stop") || lower.contains("cancel that") {
+                KillSwitch.shared.trigger(reason: "User verbal cancellation: '\(trimmed)'")
             }
+            let resp = "Action cancelled."
+            let decision = OutputDirector.shared.decide(
+                responseText: resp,
+                origin: request.origin
+            )
+            return AssistantResponse(
+                id: request.id,
+                success: true,
+                responseText: resp,
+                speechText: decision.spokenText ?? "",
+                badge: HUDTurnBadge(label: "cancelled", provider: "Guard", modelID: "negation", isLocal: true),
+                latencyMs: elapsedMs(),
+                outputDecision: decision
+            )
         }
         
         // 5. Memory Operations (Explicit Remember)
@@ -295,11 +313,58 @@ public final class AssistantPipeline: @unchecked Sendable {
             )
         }
         
-        // 5.5. Contextual Reference Resolution
+        // 5.5. Pending Clarification Follow-up & Contextual Reference Resolution
         var effectiveUtterance = archetypeQuery
         var preResolvedIntent: ResolvedIntent? = nil
         
-        if referenceResolver.containsAnaphora(archetypeQuery) {
+        if let pending = await sessionManager.getPendingClarification(sessionID: request.sessionID) {
+            if let resolvedDir = router.resolveKnownDirectory(from: archetypeQuery) {
+                await sessionManager.clearPendingClarification(sessionID: request.sessionID)
+                if pending.kind == "create_directory" || pending.kind == "create_directories" {
+                    let steps = pending.targets.map { name -> ResolvedPlanStep in
+                        let path = (name.hasPrefix("~/") || name.hasPrefix("/"))
+                            ? name
+                            : (resolvedDir as NSString).appendingPathComponent(name)
+                        return ResolvedPlanStep(
+                            toolName: "create_directory",
+                            arguments: ["path": path, "recursive": "false", "create_if_missing": "false"],
+                            description: "Create folder \((path as NSString).lastPathComponent) in \(resolvedDir)"
+                        )
+                    }
+                    if steps.count == 1 {
+                        preResolvedIntent = ResolvedIntent(
+                            toolName: steps[0].toolName,
+                            arguments: steps[0].arguments,
+                            confidence: 0.99
+                        )
+                    } else if steps.count > 1 {
+                        preResolvedIntent = ResolvedIntent(
+                            toolName: "create_directory",
+                            arguments: steps[0].arguments,
+                            confidence: 0.99,
+                            planSteps: steps
+                        )
+                    }
+                } else if pending.kind == "rename_source",
+                          let sourceName = pending.targets.first,
+                          let newName = pending.newName {
+                    let srcPath = (resolvedDir as NSString).appendingPathComponent(sourceName)
+                    let dstPath = (newName.hasPrefix("/") || newName.hasPrefix("~/"))
+                        ? newName
+                        : (resolvedDir as NSString).appendingPathComponent(newName)
+                    preResolvedIntent = ResolvedIntent(
+                        toolName: "rename_file",
+                        arguments: ["source": srcPath, "destination": dstPath],
+                        confidence: 0.98
+                    )
+                }
+            } else {
+                // User switched topic rather than answering clarification
+                await sessionManager.clearPendingClarification(sessionID: request.sessionID)
+            }
+        }
+        
+        if preResolvedIntent == nil, referenceResolver.containsAnaphora(archetypeQuery) {
             let recentTurns = await sessionManager.getRecentTurns(sessionID: request.sessionID)
             let resolution = referenceResolver.resolve(utterance: archetypeQuery, history: recentTurns)
             if resolution.didResolve {
@@ -332,7 +397,18 @@ public final class AssistantPipeline: @unchecked Sendable {
         }
         
         // 6. Classify intent via Deterministic Router (L0)
-        let intent = preResolvedIntent ?? router.resolve(utterance: effectiveUtterance)
+        var intent = preResolvedIntent ?? router.resolve(utterance: effectiveUtterance)
+        if let rawIntent = intent {
+            // Disambiguate bare filenames for rename/move/trash against recent session context or approved folders without guessing
+            if let disambiguated = await disambiguateFilesystemIntent(rawIntent, request: request, elapsedMs: elapsedMs) {
+                switch disambiguated {
+                case .resolved(let updated):
+                    intent = updated
+                case .earlyResponse(let response):
+                    return response
+                }
+            }
+        }
         if let intent = intent {
             if let builtInResponse = await handleBuiltInIntent(
                 intent,
@@ -342,7 +418,95 @@ public final class AssistantPipeline: @unchecked Sendable {
             ) {
                 return builtInResponse
             }
-            if let tool = toolRegistry.tool(named: intent.toolName) {
+            
+            // Multi-step deterministic plan (e.g. "Create three folders named Backend, Frontend and Documentation on Desktop")
+            if let planSteps = intent.planSteps, planSteps.count > 1 {
+                KillSwitch.shared.reset()
+                let executor = effectivePlanExecutor()
+                let steps = planSteps.enumerated().map { idx, ps in
+                    let registeredTool = lookupTool(named: ps.toolName)
+                    return PlanStep(
+                        index: idx,
+                        description: ps.description.isEmpty ? ps.toolName : ps.description,
+                        toolName: ps.toolName,
+                        arguments: ps.arguments,
+                        status: .pending,
+                        resultMessage: nil,
+                        reversible: registeredTool?.isReversible ?? false
+                    )
+                }
+                let toolContext = ToolExecutionContext(
+                    trustState: effectiveTrust,
+                    userConfirmed: request.userConfirmed,
+                    providerIsLocal: true,
+                    taintState: request.clientTaintState,
+                    freshConfirmationArgs: request.freshConfirmationArgs
+                )
+                do {
+                    let job = try await executor.executePlan(
+                        goal: effectiveUtterance,
+                        steps: steps,
+                        context: toolContext,
+                        archetype: activeArchetype
+                    )
+                    let duration = elapsedMs()
+                    let summaryMsg = job.steps.map { "• [\($0.status.rawValue)] \($0.toolName): \($0.resultMessage ?? "")" }.joined(separator: "\n")
+                    let isConfirmation = job.status == .pausedForApproval
+                    let finalMsg = isConfirmation
+                        ? "Confirmation required for multi-step plan '\(job.goal)' (Job \(String(job.id.prefix(8))))."
+                        : summaryMsg
+                    let records = job.steps.map { step in
+                        ToolExecutionRecord(
+                            toolName: step.toolName,
+                            arguments: step.arguments,
+                            success: step.status == .completed,
+                            resultMessage: step.resultMessage ?? "",
+                            durationMs: duration
+                        )
+                    }
+                    let turn = ConversationTurn(
+                        turnId: UUID(),
+                        timestamp: Date(),
+                        rawInput: request.utterance,
+                        cleanedInput: effectiveUtterance,
+                        resolvedIntent: intent,
+                        toolInvocations: records,
+                        assistantResponse: finalMsg,
+                        tokenUsage: nil,
+                        latencyMs: duration
+                    )
+                    await sessionManager.recordTurn(turn, sessionID: request.sessionID)
+                    let badge = HUDTurnBadge(
+                        label: activeArchetype?.rawValue ?? "",
+                        provider: "Deterministic",
+                        modelID: "multi-step(\(steps.count))",
+                        isLocal: true,
+                        details: String(format: "%.1f ms", duration)
+                    )
+                    let pausedStep = isConfirmation ? job.steps.first(where: { $0.status == .pausedForApproval }) : nil
+                    return finalizeResponse(
+                        text: finalMsg,
+                        request: request,
+                        badge: badge,
+                        latencyMs: duration,
+                        success: job.status == .completed,
+                        isConfirmation: isConfirmation,
+                        confirmationToolName: pausedStep?.toolName,
+                        confirmationArguments: pausedStep?.arguments,
+                        confirmationReason: isConfirmation ? pausedStep?.resultMessage : nil
+                    )
+                } catch {
+                    return finalizeResponse(
+                        text: "Multi-step execution failed: \(error.localizedDescription)",
+                        request: request,
+                        badge: HUDTurnBadge(label: "error", provider: "PlanExecutor", modelID: intent.toolName, isLocal: true),
+                        latencyMs: elapsedMs(),
+                        success: false
+                    )
+                }
+            }
+            
+            if let tool = lookupTool(named: intent.toolName) {
                 let toolContext = ToolExecutionContext(
                     trustState: effectiveTrust,
                     userConfirmed: request.userConfirmed,
@@ -381,8 +545,10 @@ public final class AssistantPipeline: @unchecked Sendable {
                     )
                     await sessionManager.recordTurn(turn, sessionID: request.sessionID)
                     
-                    let isConfirmation = toolRes.message.localizedCaseInsensitiveContains("confirmation required") ||
-                                         toolRes.message.localizedCaseInsensitiveContains("user confirmation required")
+                    let isConfirmation = !toolRes.success && (
+                        toolRes.message.localizedCaseInsensitiveContains("confirmation required") ||
+                        toolRes.message.localizedCaseInsensitiveContains("user confirmation required")
+                    )
                     return finalizeResponse(
                         text: toolRes.message,
                         request: request,
@@ -390,7 +556,10 @@ public final class AssistantPipeline: @unchecked Sendable {
                         latencyMs: duration,
                         success: toolRes.success,
                         isConfirmation: isConfirmation,
-                        toolResults: [toolRes]
+                        toolResults: [toolRes],
+                        confirmationToolName: isConfirmation ? intent.toolName : nil,
+                        confirmationArguments: isConfirmation ? intent.arguments : nil,
+                        confirmationReason: isConfirmation ? toolRes.message : nil
                     )
                 } catch {
                     let duration = elapsedMs()
@@ -416,8 +585,12 @@ public final class AssistantPipeline: @unchecked Sendable {
                     )
                 }
             } else {
+                let metaExists = CentralToolCatalog.shared.metadata(for: intent.toolName) != nil
+                let msg = metaExists
+                    ? "Tool '\(intent.toolName)' is defined in catalog metadata but not implemented or registered at runtime."
+                    : "Tool '\(intent.toolName)' is not registered."
                 return finalizeResponse(
-                    text: "Tool '\(intent.toolName)' not registered.",
+                    text: msg,
                     request: request,
                     badge: HUDTurnBadge(label: "error", provider: "ToolRegistry", modelID: "missing", isLocal: true),
                     latencyMs: elapsedMs(),
@@ -476,8 +649,9 @@ public final class AssistantPipeline: @unchecked Sendable {
             if modelRes.toolCalls.count >= 2 {
                 // Multi-step model plan -> route through bounded PlanExecutor harness
                 KillSwitch.shared.reset()
+                let executor = effectivePlanExecutor()
                 let planSteps: [PlanStep] = modelRes.toolCalls.enumerated().map { idx, call in
-                    let registeredTool = toolRegistry.tool(named: call.toolName)
+                    let registeredTool = lookupTool(named: call.toolName)
                     return PlanStep(
                         index: idx,
                         description: call.toolName,
@@ -489,7 +663,7 @@ public final class AssistantPipeline: @unchecked Sendable {
                     )
                 }
                 do {
-                    let job = try await PlanExecutor.shared.executePlan(
+                    let job = try await executor.executePlan(
                         goal: effectiveUtterance,
                         steps: planSteps,
                         context: toolContext,
@@ -525,13 +699,17 @@ public final class AssistantPipeline: @unchecked Sendable {
                         latencyMs: duration
                     )
                     await sessionManager.recordTurn(turn, sessionID: request.sessionID)
+                    let pausedStep = isConfirmation ? job.steps.first(where: { $0.status == .pausedForApproval }) : nil
                     return finalizeResponse(
                         text: finalMsg,
                         request: request,
                         badge: modelRes.badge,
                         latencyMs: duration,
                         success: job.status == .completed,
-                        isConfirmation: isConfirmation
+                        isConfirmation: isConfirmation,
+                        confirmationToolName: pausedStep?.toolName,
+                        confirmationArguments: pausedStep?.arguments,
+                        confirmationReason: isConfirmation ? pausedStep?.resultMessage : nil
                     )
                 } catch {
                     // Fall through to standard single-turn executor on harness setup error
@@ -569,10 +747,18 @@ public final class AssistantPipeline: @unchecked Sendable {
             )
             await sessionManager.recordTurn(turn, sessionID: request.sessionID)
             
-            let isConfirmation = finalMessage.localizedCaseInsensitiveContains("confirmation required") ||
-                                 finalMessage.localizedCaseInsensitiveContains("user confirmation required") ||
-                                 summary.results.contains { $0.message.localizedCaseInsensitiveContains("confirmation required") }
-            let succeeded = summary.toolCallsSucceeded > 0 || modelRes.toolCalls.isEmpty
+            let isConfirmation = summary.results.contains { res in
+                !res.success && (
+                    res.message.localizedCaseInsensitiveContains("confirmation required") ||
+                    res.message.localizedCaseInsensitiveContains("user confirmation required")
+                )
+            } || finalMessage.localizedCaseInsensitiveContains("confirmation required")
+            let succeeded = summary.toolCallsSucceeded > 0 && summary.toolCallsSucceeded == summary.results.count
+            let confirmIdx = summary.results.firstIndex(where: {
+                !$0.success && $0.message.localizedCaseInsensitiveContains("confirmation required")
+            })
+            let confirmCall = confirmIdx.flatMap { $0 < modelRes.toolCalls.count ? modelRes.toolCalls[$0] : nil }
+            let confirmMsg = confirmIdx.map { summary.results[$0].message }
             return finalizeResponse(
                 text: finalMessage,
                 request: request,
@@ -580,12 +766,18 @@ public final class AssistantPipeline: @unchecked Sendable {
                 latencyMs: duration,
                 success: succeeded,
                 isConfirmation: isConfirmation,
-                toolResults: summary.results
+                toolResults: summary.results,
+                confirmationToolName: confirmCall?.toolName,
+                confirmationArguments: confirmCall?.arguments,
+                confirmationReason: confirmMsg
             )
         }
         
         // Conversational response without tool calls
-        await memoryProvider?.proposePreferenceIfApplicable(utterance: trimmed, trust: effectiveTrust)
+        let isOfflineFallback = (modelRes.providerName == "Offline Fallback")
+        if !isOfflineFallback {
+            await memoryProvider?.proposePreferenceIfApplicable(utterance: trimmed, trust: effectiveTrust)
+        }
         let duration = elapsedMs()
         let turn = ConversationTurn(
             turnId: UUID(),
@@ -600,16 +792,123 @@ public final class AssistantPipeline: @unchecked Sendable {
         )
         await sessionManager.recordTurn(turn, sessionID: request.sessionID)
         
-        let isConfirmation = modelRes.content.localizedCaseInsensitiveContains("confirmation required") ||
-                             modelRes.content.localizedCaseInsensitiveContains("user confirmation required")
+        let isConfirmation = !isOfflineFallback && (
+            modelRes.content.localizedCaseInsensitiveContains("confirmation required") ||
+            modelRes.content.localizedCaseInsensitiveContains("user confirmation required")
+        )
         return finalizeResponse(
             text: modelRes.content,
             request: request,
             badge: modelRes.badge,
             latencyMs: duration,
-            success: true,
+            success: !isOfflineFallback,
             isConfirmation: isConfirmation
         )
+    }
+    
+    private func lookupTool(named name: String) -> (any PearlTool)? {
+        return toolRegistry.tool(named: name) ??
+            (toolRegistry === ToolRegistry.shared ? CentralToolCatalog.shared.tool(named: name) : nil)
+    }
+    
+    private func effectivePlanExecutor() -> PlanExecutor {
+        if toolRegistry === ToolRegistry.shared && policyEngine === PolicyEngine.shared {
+            return .shared
+        }
+        return PlanExecutor(policyEngine: policyEngine, toolRegistry: toolRegistry)
+    }
+    
+    private enum DisambiguationOutcome {
+        case resolved(ResolvedIntent)
+        case earlyResponse(AssistantResponse)
+    }
+    
+    private func disambiguateFilesystemIntent(
+        _ intent: ResolvedIntent,
+        request: AssistantRequest,
+        elapsedMs: () -> Double
+    ) async -> DisambiguationOutcome? {
+        guard intent.toolName == "rename_file" else { return nil }
+        guard let rawSource = intent.arguments["source"],
+              !rawSource.contains("/"),
+              !rawSource.hasPrefix("~") else {
+            return nil
+        }
+        
+        // 1. Check recent session turns for exact matching filename
+        let recent = await sessionManager.getRecentTurns(sessionID: request.sessionID)
+        if let recentPath = referenceResolver.extractMostRecentPathEntity(from: recent) {
+            let expanded = (recentPath as NSString).expandingTildeInPath
+            if (expanded as NSString).lastPathComponent.lowercased() == rawSource.lowercased() {
+                let parent = (recentPath as NSString).deletingLastPathComponent
+                let newName = intent.arguments["destination"] ?? ""
+                let resolvedDest = (newName.contains("/") || newName.hasPrefix("~"))
+                    ? newName
+                    : (parent as NSString).appendingPathComponent(newName)
+                var args = intent.arguments
+                args["source"] = recentPath
+                args["destination"] = resolvedDest
+                return .resolved(ResolvedIntent(toolName: "rename_file", arguments: args, confidence: intent.confidence))
+            }
+        }
+        
+        // 2. Check approved folders on disk for unique vs ambiguous matches (never guess)
+        let allowed = PearlConfig.load().allowedFolders
+        let fm = FileManager.default
+        var matches: [(approved: String, full: String)] = []
+        for folder in allowed {
+            let expandedDir = (folder as NSString).expandingTildeInPath
+            let candidate = (expandedDir as NSString).appendingPathComponent(rawSource)
+            if fm.fileExists(atPath: candidate) {
+                matches.append((folder, (folder as NSString).appendingPathComponent(rawSource)))
+            }
+        }
+        
+        if matches.count == 1 {
+            let match = matches[0]
+            let parent = (match.full as NSString).deletingLastPathComponent
+            let newName = intent.arguments["destination"] ?? ""
+            let resolvedDest = (newName.contains("/") || newName.hasPrefix("~"))
+                ? newName
+                : (parent as NSString).appendingPathComponent(newName)
+            var args = intent.arguments
+            args["source"] = match.full
+            args["destination"] = resolvedDest
+            return .resolved(ResolvedIntent(toolName: "rename_file", arguments: args, confidence: intent.confidence))
+        }
+        
+        if matches.isEmpty {
+            let msg = "Could not find '\(rawSource)' in your approved folders (Desktop, Documents, Downloads, Projects). Specify its full path to proceed."
+            return .earlyResponse(finalizeResponse(
+                text: msg,
+                request: request,
+                badge: HUDTurnBadge(label: "not found", provider: "Deterministic", modelID: "rename_file", isLocal: true),
+                latencyMs: elapsedMs(),
+                success: false
+            ))
+        }
+        
+        let newName = intent.arguments["destination"] ?? ""
+        let locationChoices = matches.map(\.approved).joined(separator: ", ")
+        let prompt = "Multiple matches found for '\(rawSource)' (\(locationChoices)). Which folder did you mean?"
+        await sessionManager.setPendingClarification(
+            PendingClarification(
+                kind: "rename_source",
+                prompt: prompt,
+                targets: [rawSource],
+                newName: newName
+            ),
+            sessionID: request.sessionID
+        )
+        let response = finalizeResponse(
+            text: prompt,
+            request: request,
+            badge: HUDTurnBadge(label: "clarify", provider: "Deterministic", modelID: "clarification", isLocal: true),
+            latencyMs: elapsedMs(),
+            success: true,
+            needsClarification: true
+        )
+        return .earlyResponse(response)
     }
     
     private func executeMatchedSkill(
@@ -624,7 +923,7 @@ public final class AssistantPipeline: @unchecked Sendable {
         var planSteps: [PlanStep] = []
         for (idx, stepDef) in skill.steps.enumerated() {
             if let intent = router.resolve(utterance: stepDef.utterance) {
-                let reversible = toolRegistry.tool(named: intent.toolName)?.isReversible ?? false
+                let reversible = lookupTool(named: intent.toolName)?.isReversible ?? false
                 planSteps.append(PlanStep(
                     index: idx,
                     description: stepDef.description,
@@ -715,6 +1014,27 @@ public final class AssistantPipeline: @unchecked Sendable {
         elapsedMs: () -> Double
     ) async -> AssistantResponse? {
         switch intent.toolName {
+        case "clarify_destination":
+            let kind = intent.arguments["kind"] ?? "create_directory"
+            let rawNames = intent.arguments["names"] ?? ""
+            let targets = rawNames.split(separator: "\n").map(String.init).filter { !$0.isEmpty }
+            let prompt = intent.clarificationPrompt ?? intent.arguments["prompt"] ?? "Where should I create it: Desktop, Documents, Downloads or Projects?"
+            await sessionManager.setPendingClarification(
+                PendingClarification(
+                    kind: kind,
+                    prompt: prompt,
+                    targets: targets
+                ),
+                sessionID: request.sessionID
+            )
+            return finalizeResponse(
+                text: prompt,
+                request: request,
+                badge: HUDTurnBadge(label: "clarify", provider: "Deterministic", modelID: "clarification", isLocal: true),
+                latencyMs: elapsedMs(),
+                success: true,
+                needsClarification: true
+            )
         case "set_persona":
             let rawMode = (intent.arguments["mode"] ?? "executive").lowercased()
             let mode = PersonaMode(rawValue: rawMode) ?? .executive
@@ -807,12 +1127,16 @@ public final class AssistantPipeline: @unchecked Sendable {
         success: Bool = true,
         isConfirmation: Bool = false,
         memoryUpdated: Bool = false,
-        toolResults: [ToolResult] = []
+        toolResults: [ToolResult] = [],
+        confirmationToolName: String? = nil,
+        confirmationArguments: [String: String]? = nil,
+        confirmationReason: String? = nil,
+        needsClarification: Bool = false
     ) -> AssistantResponse {
         let decorated = PersonaEngine.shared.decorateResponse(
             text,
             isActionSuccess: success,
-            isConfirmationOrJSON: isConfirmation
+            isConfirmationOrJSON: isConfirmation || needsClarification
         )
         let decision = OutputDirector.shared.decide(
             responseText: decorated,
@@ -829,7 +1153,12 @@ public final class AssistantPipeline: @unchecked Sendable {
             latencyMs: latencyMs,
             toolResults: toolResults,
             memoryUpdated: memoryUpdated,
-            outputDecision: decision
+            outputDecision: decision,
+            requiresConfirmation: isConfirmation,
+            confirmationToolName: confirmationToolName,
+            confirmationArguments: confirmationArguments,
+            confirmationReason: confirmationReason,
+            needsClarification: needsClarification
         )
     }
     

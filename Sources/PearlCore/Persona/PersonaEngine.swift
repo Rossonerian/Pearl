@@ -92,9 +92,7 @@ public final class PersonaEngine: @unchecked Sendable {
         if let url = stateFileURL {
             self.stateFileURL = url
         } else {
-            let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
-                ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support")
-            self.stateFileURL = appSupport.appendingPathComponent("Pearl/persona_state.json")
+            self.stateFileURL = PearlStoragePaths.fileURL(named: "persona_state.json")
         }
         loadState()
     }

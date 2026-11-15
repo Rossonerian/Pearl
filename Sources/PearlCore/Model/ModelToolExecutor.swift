@@ -89,38 +89,58 @@ public final class ModelToolExecutor: Sendable {
         
         for call in callsToExecute {
             // 1. Look up tool in registry / catalog
-            guard let tool = registry.tool(named: call.toolName) ?? catalog.tool(named: call.toolName) else {
+            let resolvedTool = registry.tool(named: call.toolName) ??
+                (registry === ToolRegistry.shared ? catalog.tool(named: call.toolName) : nil)
+            guard let tool = resolvedTool else {
                 let failure = ToolResult(
                     success: false,
                     message: "Tool '\(call.toolName)' is not registered.",
-                    trust: context.trustState
+                    trust: context.trustState,
+                    errorCode: .toolNotRegistered
                 )
                 results.append(failure)
                 messages.append(failure.message)
                 continue
             }
             
-            // 2. Validate provider tier boundary: on-device local models can ONLY call T0-T2 tools
-            if providerIsLocal && tool.tier > .t2ReadPersonal {
-                let tierMsg = "Security policy: Local model cannot execute '\(tool.name)' (Tier \(tool.tier.rawValue)). Escalation or user confirmation required."
-                let failure = ToolResult(
-                    success: false,
-                    message: tierMsg,
-                    trust: context.trustState
-                )
-                results.append(failure)
-                messages.append(tierMsg)
-                continue
+            // 2. Enforce strict local-model boundary for tainted/untrusted T3+ and T5 raw shell
+            let effectiveTaint = context.taintState.isTainted ? context.taintState : TaintTracker.shared.currentState
+            if providerIsLocal {
+                if tool.tier >= .t5RawShell {
+                    let tierMsg = "Action denied by security policy: Local model cannot execute T5 raw shell tool '\(tool.name)'."
+                    let failure = ToolResult(
+                        success: false,
+                        message: tierMsg,
+                        trust: context.trustState,
+                        errorCode: .permissionDenied
+                    )
+                    results.append(failure)
+                    messages.append(tierMsg)
+                    continue
+                }
+                if (effectiveTaint.isTainted || context.trustState == .untrusted) && tool.tier >= .t3WorkspaceChanges && !context.userConfirmed {
+                    let tierMsg = "Security policy: Local model cannot execute '\(tool.name)' (Tier \(tool.tier.rawValue)) in tainted/untrusted context."
+                    let failure = ToolResult(
+                        success: false,
+                        message: tierMsg,
+                        trust: context.trustState,
+                        errorCode: .permissionDenied
+                    )
+                    results.append(failure)
+                    messages.append(tierMsg)
+                    continue
+                }
             }
             
-            // 3. Validate typed arguments against descriptors
+            // 3. Validate typed arguments against canonical catalog metadata or tool descriptors
+            let descriptors = catalog.metadata(for: tool.name)?.arguments ?? tool.argumentDescriptors
             var validationError: String? = nil
-            for desc in tool.argumentDescriptors {
-                if desc.isRequired && (call.arguments[desc.name] == nil || call.arguments[desc.name]!.isEmpty) {
+            for desc in descriptors {
+                if desc.isRequired && (call.arguments[desc.name] == nil || call.arguments[desc.name]!.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) {
                     validationError = "Missing required argument '\(desc.name)'"
                     break
                 }
-                if let allowed = desc.allowedValues, let val = call.arguments[desc.name] {
+                if let allowed = desc.allowedValues, let val = call.arguments[desc.name], !val.isEmpty {
                     if !allowed.contains(val) {
                         validationError = "Invalid value '\(val)' for argument '\(desc.name)'. Allowed: \(allowed)"
                         break
@@ -132,7 +152,8 @@ public final class ModelToolExecutor: Sendable {
                 let failure = ToolResult(
                     success: false,
                     message: "Validation failed for '\(tool.name)': \(err)",
-                    trust: context.trustState
+                    trust: context.trustState,
+                    errorCode: .invalidArguments
                 )
                 results.append(failure)
                 messages.append(failure.message)

@@ -38,7 +38,7 @@ public final class ContextReferenceResolver: Sendable {
     /// Checks whether an utterance contains anaphoric pronouns or repetition markers.
     public func containsAnaphora(_ utterance: String) -> Bool {
         let lower = utterance.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
-        let pattern = #"\b(it|that|this|them|its|again|the same|same thing|repeat|once more|one more time|the app|that app|the application|that application|the repo|that repo|the repository|that repository|the branch|that branch)\b"#
+        let pattern = #"\b(it|that|this|them|its|again|the same|same thing|repeat|once more|one more time|the app|that app|the application|that application|the repo|that repo|the repository|that repository|the branch|that branch|this file|that file|the file|this folder|that folder|the folder|this directory|that directory|the directory)\b"#
         guard let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) else {
             return false
         }
@@ -136,6 +136,23 @@ public final class ContextReferenceResolver: Sendable {
                     entityCategory: "repository"
                 )
             }
+        }
+        
+        // 3.5. File / Folder Path Anaphora ("move this file into Archive", "trash that folder", "rename this folder to Archive")
+        let fileAnaphoraPhrases = ["this file", "that file", "the file", "this folder", "that folder", "the folder", "this directory", "that directory", "the directory"]
+        if fileAnaphoraPhrases.contains(where: { lower.contains($0) }),
+           let recentPath = extractMostRecentPathEntity(from: history) {
+            var rewritten = trimmed
+            for phrase in fileAnaphoraPhrases {
+                rewritten = replacePhrase(in: rewritten, phrase: phrase, with: recentPath)
+            }
+            return ContextResolutionResult(
+                originalUtterance: trimmed,
+                resolvedUtterance: rewritten,
+                didResolve: true,
+                antecedentEntity: recentPath,
+                entityCategory: "filesystem"
+            )
         }
         
         // 4. General Pronoun Replacement Heuristic
@@ -291,11 +308,35 @@ public final class ContextReferenceResolver: Sendable {
         return nil
     }
     
+    /// Extracts the most recent file or folder path referenced in recent turns.
+    public func extractMostRecentPathEntity(from history: [ConversationTurn]) -> String? {
+        let pathTools: Set<String> = [
+            "create_directory", "list_directory", "search_files", "read_file_safe",
+            "copy_file", "move_file", "rename_file", "trash_file"
+        ]
+        for turn in history.reversed() {
+            for inv in turn.toolInvocations.reversed() where pathTools.contains(inv.toolName) {
+                if let path = inv.arguments["destination"] ?? inv.arguments["path"] ?? inv.arguments["source"],
+                   !path.isEmpty {
+                    return path
+                }
+            }
+            if let intent = turn.resolvedIntent, pathTools.contains(intent.toolName) {
+                if let path = intent.arguments["destination"] ?? intent.arguments["path"] ?? intent.arguments["source"],
+                   !path.isEmpty {
+                    return path
+                }
+            }
+        }
+        return nil
+    }
+    
     private func replacePhrase(in text: String, phrase: String, with replacement: String) -> String {
         guard let regex = try? NSRegularExpression(pattern: #"\b"# + NSRegularExpression.escapedPattern(for: phrase) + #"\b"#, options: .caseInsensitive) else {
             return text
         }
         let range = NSRange(location: 0, length: text.utf16.count)
-        return regex.stringByReplacingMatches(in: text, options: [], range: range, withTemplate: replacement)
+        let escapedReplacement = NSRegularExpression.escapedTemplate(for: replacement)
+        return regex.stringByReplacingMatches(in: text, options: [], range: range, withTemplate: escapedReplacement)
     }
 }

@@ -28,16 +28,19 @@ public struct PearlConfig: Codable, Sendable {
     public var outputDirectoryPath: String
     public var subBotMaxConcurrency: Int
     public var firecrawlApiKey: String?
+    public var launchAtLoginEnabled: Bool
     
     enum CodingKeys: String, CodingKey {
         case version, hotkey, socketPath, fastModelID, escalationModelID, modelProviderEndpoint, voiceLocale, preferredVoice, bargeInEnabled, pushToTalkDefault, maxContextTokens, memoryDirectory, monthlySpendCapUSD, maxTokensPerTurn, pccEnabled, mlxEnabled, mlxModelID, mlxIdleUnloadSeconds, allowedFolders, quietHoursStart, quietHoursEnd, autoLeaveSeconds
-        case activePersona, vaultPath, outputDirectoryPath, subBotMaxConcurrency, firecrawlApiKey
+        case activePersona, vaultPath, outputDirectoryPath, subBotMaxConcurrency, firecrawlApiKey, launchAtLoginEnabled
     }
     
+    public static let currentVersion = "3.3.0"
+    
     public init(
-        version: String = "3.2.0",
+        version: String = PearlConfig.currentVersion,
         hotkey: String = "ctrl+opt+space",
-        socketPath: String = ("~/Library/Application Support/Pearl/pearl.sock" as NSString).expandingTildeInPath,
+        socketPath: String = PearlStoragePaths.fileURL(named: "pearl.sock").path,
         fastModelID: String = "claude-haiku-5-5",
         escalationModelID: String = "claude-sonnet-5-5",
         modelProviderEndpoint: String = "https://api.anthropic.com/v1/messages",
@@ -61,7 +64,8 @@ public struct PearlConfig: Codable, Sendable {
         vaultPath: String = ("~/Documents/PearlVault" as NSString).expandingTildeInPath,
         outputDirectoryPath: String = ("~/Documents/PearlOutput" as NSString).expandingTildeInPath,
         subBotMaxConcurrency: Int = 4,
-        firecrawlApiKey: String? = nil
+        firecrawlApiKey: String? = nil,
+        launchAtLoginEnabled: Bool = false
     ) {
         self.version = version
         self.hotkey = hotkey
@@ -90,13 +94,14 @@ public struct PearlConfig: Codable, Sendable {
         self.outputDirectoryPath = outputDirectoryPath
         self.subBotMaxConcurrency = subBotMaxConcurrency
         self.firecrawlApiKey = firecrawlApiKey
+        self.launchAtLoginEnabled = launchAtLoginEnabled
     }
     
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        self.version = try container.decodeIfPresent(String.self, forKey: .version) ?? "3.2.0"
+        self.version = try container.decodeIfPresent(String.self, forKey: .version) ?? PearlConfig.currentVersion
         self.hotkey = try container.decodeIfPresent(String.self, forKey: .hotkey) ?? "ctrl+opt+space"
-        self.socketPath = try container.decodeIfPresent(String.self, forKey: .socketPath) ?? ("~/Library/Application Support/Pearl/pearl.sock" as NSString).expandingTildeInPath
+        self.socketPath = try container.decodeIfPresent(String.self, forKey: .socketPath) ?? PearlStoragePaths.fileURL(named: "pearl.sock").path
         self.fastModelID = try container.decodeIfPresent(String.self, forKey: .fastModelID) ?? "claude-haiku-5-5"
         self.escalationModelID = try container.decodeIfPresent(String.self, forKey: .escalationModelID) ?? "claude-sonnet-5-5"
         self.modelProviderEndpoint = try container.decodeIfPresent(String.self, forKey: .modelProviderEndpoint) ?? "https://api.anthropic.com/v1/messages"
@@ -121,11 +126,11 @@ public struct PearlConfig: Codable, Sendable {
         self.outputDirectoryPath = try container.decodeIfPresent(String.self, forKey: .outputDirectoryPath) ?? ("~/Documents/PearlOutput" as NSString).expandingTildeInPath
         self.subBotMaxConcurrency = try container.decodeIfPresent(Int.self, forKey: .subBotMaxConcurrency) ?? 4
         self.firecrawlApiKey = try container.decodeIfPresent(String.self, forKey: .firecrawlApiKey)
+        self.launchAtLoginEnabled = try container.decodeIfPresent(Bool.self, forKey: .launchAtLoginEnabled) ?? false
     }
     
     public static var defaultConfigurationDirectory: URL {
-        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        return appSupport.appendingPathComponent("Pearl", isDirectory: true)
+        return PearlStoragePaths.supportDirectory
     }
     
     public static var defaultConfigFileURL: URL {
@@ -135,10 +140,14 @@ public struct PearlConfig: Codable, Sendable {
     public static func load() -> PearlConfig {
         let fileURL = defaultConfigFileURL
         guard let data = try? Data(contentsOf: fileURL),
-              let config = try? JSONDecoder().decode(PearlConfig.self, from: data) else {
+              var config = try? JSONDecoder().decode(PearlConfig.self, from: data) else {
             let defaultConfig = PearlConfig()
             defaultConfig.save()
             return defaultConfig
+        }
+        if config.version.compare(currentVersion, options: .numeric) == .orderedAscending {
+            config.version = currentVersion
+            config.save()
         }
         return config
     }

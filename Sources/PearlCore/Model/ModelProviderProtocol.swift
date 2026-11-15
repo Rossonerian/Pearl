@@ -123,19 +123,28 @@ public enum ModelTierError: LocalizedError, Sendable, Equatable {
 }
 
 public struct ToolTierEnforcer {
-    /// Strictly verifies that local models only invoke T0-T2 tools.
-    /// The model NEVER picks its own tier: the registered tool's tier from ToolRegistry is strictly used.
+    /// Verifies that local models respect tool-tier boundaries while allowing clean trusted T0-T3 actions.
+    /// The model NEVER picks its own tier: the registered tool's tier from ToolRegistry/CentralToolCatalog is strictly used.
     public static func validateToolCall(
         _ toolCall: ModelToolCall,
         providerIsLocal: Bool,
-        registry: ToolRegistry = .shared
+        registry: ToolRegistry = .shared,
+        trustState: TrustLevel = .trusted,
+        taintState: TaintState = .clean
     ) throws -> any PearlTool {
-        guard let tool = registry.tool(named: toolCall.toolName) else {
+        let resolvedTool = registry.tool(named: toolCall.toolName) ??
+            (registry === ToolRegistry.shared ? CentralToolCatalog.shared.tool(named: toolCall.toolName) : nil)
+        guard let tool = resolvedTool else {
             throw ModelTierError.toolNotFound(toolCall.toolName)
         }
         
-        if providerIsLocal && tool.tier > .t2ReadPersonal {
-            throw ModelTierError.localModelTierViolation(tool: tool.name, tier: tool.tier)
+        if providerIsLocal {
+            if tool.tier >= .t4ExternalSideEffects {
+                throw ModelTierError.escalationRequired(tool: tool.name, tier: tool.tier)
+            }
+            if (trustState == .untrusted || taintState.isTainted) && tool.tier >= .t3WorkspaceChanges {
+                throw ModelTierError.localModelTierViolation(tool: tool.name, tier: tool.tier)
+            }
         }
         
         return tool

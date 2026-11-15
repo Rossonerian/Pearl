@@ -40,7 +40,14 @@ public final class PolicyEngine: Sendable {
             }
         }
         
-        // 4. Untrusted context cannot perform T3+ actions without explicit confirmation
+        let explicitFlagConfirmed = (
+            context.trustState == .trusted &&
+            !effectiveTaint.isTainted &&
+            args["confirm"]?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "true"
+        )
+        let isConfirmed = context.userConfirmed || explicitFlagConfirmed
+        
+        // 4. Untrusted context cannot perform T3+ actions without explicit user confirmation
         if context.trustState == .untrusted && tool.tier >= .t3WorkspaceChanges {
             if !context.userConfirmed {
                 return .confirmationRequired(reason: "Context is tainted by external/untrusted content. Confirmation required for \(tool.name).")
@@ -48,8 +55,15 @@ public final class PolicyEngine: Sendable {
         }
         
         // 5. T4 and T5 always require confirmation
-        if tool.tier >= .t4ExternalSideEffects && !context.userConfirmed {
+        if tool.tier >= .t4ExternalSideEffects && !isConfirmed {
             return .confirmationRequired(reason: "Action \(tool.name) has external or irreversible side effects.")
+        }
+        
+        // 6. Enforce ToolMetadata.requiresConfirmation on T1-T3 tools (e.g. delete_task, trash_file, rename_file, move_file)
+        if let meta = CentralToolCatalog.shared.metadata(for: tool.name),
+           meta.requiresConfirmation,
+           !isConfirmed {
+            return .confirmationRequired(reason: "Action '\(tool.name)' requires user confirmation before execution.")
         }
         
         return .allowed
@@ -93,7 +107,8 @@ public final class PolicyEngine: Sendable {
             return ToolResult(
                 success: false,
                 message: "Confirmation required: \(reason)",
-                trust: context.trustState
+                trust: context.trustState,
+                errorCode: .permissionDenied
             )
             
         case .denied(let reason):
@@ -107,7 +122,8 @@ public final class PolicyEngine: Sendable {
             return ToolResult(
                 success: false,
                 message: "Action denied by security policy: \(reason)",
-                trust: context.trustState
+                trust: context.trustState,
+                errorCode: .permissionDenied
             )
         }
     }
