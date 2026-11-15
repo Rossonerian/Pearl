@@ -196,244 +196,157 @@ public final class MCPServer: @unchecked Sendable {
         MCPServer.registerDefaultTools(into: registry)
     }
     
-    /// Registers the 8 native T0–T2 tools into the given registry if not already present
-    public static func registerDefaultTools(into registry: ToolRegistry = .shared) {
-        if registry.tool(named: "volume") == nil { registry.register(VolumeTool()) }
-        if registry.tool(named: "battery") == nil { registry.register(BatteryTool()) }
-        if registry.tool(named: "frontmost_app") == nil { registry.register(FrontmostAppTool()) }
-        if registry.tool(named: "open_app") == nil { registry.register(AppTool()) }
-        if registry.tool(named: "undo") == nil { registry.register(UndoTool()) }
-        if registry.tool(named: "screenshot") == nil { registry.register(ScreenshotTool()) }
-        if registry.tool(named: "reminder") == nil { registry.register(ReminderTool()) }
-        if registry.tool(named: "git_status") == nil { registry.register(GitStatusTool()) }
-        if registry.tool(named: "list_tasks") == nil { registry.register(ListTasksTool()) }
-        if registry.tool(named: "create_task") == nil { registry.register(CreateTaskTool()) }
-        if registry.tool(named: "complete_task") == nil { registry.register(CompleteTaskTool()) }
-        if registry.tool(named: "delete_task") == nil { registry.register(DeleteTaskTool()) }
+    private static func makeDefaultTools() -> [any PearlTool] {
+        return [
+            VolumeTool(),
+            BatteryTool(),
+            FrontmostAppTool(),
+            AppTool(),
+            UndoTool(),
+            ScreenshotTool(),
+            ReminderTool(),
+            GitStatusTool(),
+            ListTasksTool(),
+            CreateTaskTool(),
+            CompleteTaskTool(),
+            DeleteTaskTool()
+        ]
     }
     
-    /// Returns the MCP tool schema definition for an exposed tool
-    public static func schema(for toolName: String, tool: any PearlTool) -> MCPToolInfo {
+    /// Legacy descriptors for default tools that do not yet override `argumentDescriptors`.
+    private static func fallbackLegacyDescriptors(for toolName: String) -> [ToolArgumentDescriptor] {
         switch toolName.lowercased() {
         case "volume":
-            return MCPToolInfo(
-                name: tool.name,
-                description: tool.description,
-                inputSchema: ToolInputSchema(
-                    properties: [
-                        "level": ToolSchemaProperty(type: "string", description: "Volume level percentage (0-100). Leave empty to query current volume.")
-                    ]
+            return [
+                ToolArgumentDescriptor(
+                    name: "level",
+                    type: "string",
+                    description: "Volume level percentage (0-100). Leave empty to query current volume.",
+                    isRequired: false
                 )
-            )
-        case "battery":
-            return MCPToolInfo(
-                name: tool.name,
-                description: tool.description,
-                inputSchema: ToolInputSchema(properties: [:])
-            )
-        case "frontmost_app":
-            return MCPToolInfo(
-                name: tool.name,
-                description: tool.description,
-                inputSchema: ToolInputSchema(properties: [:])
-            )
+            ]
         case "open_app":
-            return MCPToolInfo(
-                name: tool.name,
-                description: tool.description,
-                inputSchema: ToolInputSchema(
-                    properties: [
-                        "app": ToolSchemaProperty(type: "string", description: "Application name or bundle identifier (e.g. 'Safari', 'Xcode')")
-                    ],
-                    required: ["app"]
+            return [
+                ToolArgumentDescriptor(
+                    name: "app",
+                    type: "string",
+                    description: "Application name or bundle identifier (e.g. 'Safari', 'Xcode')",
+                    isRequired: true
                 )
-            )
-        case "undo":
-            return MCPToolInfo(
-                name: tool.name,
-                description: tool.description,
-                inputSchema: ToolInputSchema(properties: [:])
-            )
-        case "screenshot":
-            return MCPToolInfo(
-                name: tool.name,
-                description: tool.description,
-                inputSchema: ToolInputSchema(properties: [:])
-            )
-        case "reminder":
-            return MCPToolInfo(
-                name: tool.name,
-                description: tool.description,
-                inputSchema: ToolInputSchema(
-                    properties: [
-                        "title": ToolSchemaProperty(type: "string", description: "Title of the reminder to create"),
-                        "action": ToolSchemaProperty(type: "string", description: "Action to perform: 'create' (default) or 'list'", enum: ["create", "list"])
-                    ]
-                )
-            )
+            ]
         case "git_status":
-            return MCPToolInfo(
-                name: tool.name,
-                description: tool.description,
-                inputSchema: ToolInputSchema(
-                    properties: [
-                        "path": ToolSchemaProperty(type: "string", description: "Path to git repository (optional, defaults to current directory)")
-                    ]
+            return [
+                ToolArgumentDescriptor(
+                    name: "path",
+                    type: "string",
+                    description: "Path to git repository (optional, defaults to current directory)",
+                    isRequired: false
                 )
-            )
-        case "list_calendar_events":
-            return MCPToolInfo(
-                name: tool.name,
-                description: tool.description,
-                inputSchema: ToolInputSchema(
-                    properties: [
-                        "time_window": ToolSchemaProperty(type: "string", description: "Window to query: 'today', 'tomorrow', 'this week', or 'next N days'"),
-                        "start_date": ToolSchemaProperty(type: "string", description: "Optional start date/time (ISO 8601 or yyyy-MM-dd HH:mm)"),
-                        "end_date": ToolSchemaProperty(type: "string", description: "Optional end date/time (ISO 8601 or yyyy-MM-dd HH:mm)")
-                    ]
-                )
-            )
-        case "check_calendar_availability":
-            return MCPToolInfo(
-                name: tool.name,
-                description: tool.description,
-                inputSchema: ToolInputSchema(
-                    properties: [
-                        "start_date": ToolSchemaProperty(type: "string", description: "Proposed slot start date/time"),
-                        "end_date": ToolSchemaProperty(type: "string", description: "Proposed slot end date/time"),
-                        "duration": ToolSchemaProperty(type: "string", description: "Slot duration (e.g. '30m', '1h')")
-                    ],
-                    required: ["start_date"]
-                )
-            )
-        case "create_calendar_event":
-            return MCPToolInfo(
-                name: tool.name,
-                description: tool.description,
-                inputSchema: ToolInputSchema(
-                    properties: [
-                        "title": ToolSchemaProperty(type: "string", description: "Event title"),
-                        "start_date": ToolSchemaProperty(type: "string", description: "Event start date/time"),
-                        "end_date": ToolSchemaProperty(type: "string", description: "Event end date/time"),
-                        "duration": ToolSchemaProperty(type: "string", description: "Event duration"),
-                        "location": ToolSchemaProperty(type: "string", description: "Physical location or URL"),
-                        "notes": ToolSchemaProperty(type: "string", description: "Notes or description")
-                    ],
-                    required: ["title", "start_date"]
-                )
-            )
-        case "delete_calendar_event":
-            return MCPToolInfo(
-                name: tool.name,
-                description: tool.description,
-                inputSchema: ToolInputSchema(
-                    properties: [
-                        "id": ToolSchemaProperty(type: "string", description: "Event ID to delete"),
-                        "title": ToolSchemaProperty(type: "string", description: "Event title to delete"),
-                        "confirm": ToolSchemaProperty(type: "string", description: "Set to 'true' to confirm deletion")
-                    ]
-                )
-            )
-        case "get_display_info", "display_info":
-            return MCPToolInfo(
-                name: tool.name,
-                description: tool.description,
-                inputSchema: ToolInputSchema(
-                    properties: [
-                        "detailed": ToolSchemaProperty(type: "string", description: "Include all displays ('true')")
-                    ]
-                )
-            )
-        case "read_clipboard":
-            return MCPToolInfo(
-                name: tool.name,
-                description: tool.description,
-                inputSchema: ToolInputSchema(
-                    properties: [
-                        "max_length": ToolSchemaProperty(type: "string", description: "Maximum characters to return")
-                    ]
-                )
-            )
-        case "write_clipboard":
-            return MCPToolInfo(
-                name: tool.name,
-                description: tool.description,
-                inputSchema: ToolInputSchema(
-                    properties: [
-                        "text": ToolSchemaProperty(type: "string", description: "Text content to copy")
-                    ],
-                    required: ["text"]
-                )
-            )
-        case "post_notification", "notification":
-            return MCPToolInfo(
-                name: tool.name,
-                description: tool.description,
-                inputSchema: ToolInputSchema(
-                    properties: [
-                        "title": ToolSchemaProperty(type: "string", description: "Notification title"),
-                        "message": ToolSchemaProperty(type: "string", description: "Notification message text"),
-                        "subtitle": ToolSchemaProperty(type: "string", description: "Optional subtitle text"),
-                        "sound": ToolSchemaProperty(type: "string", description: "Play default sound ('true')")
-                    ],
-                    required: ["message"]
-                )
-            )
-        case "list_tasks":
-            return MCPToolInfo(
-                name: tool.name,
-                description: tool.description,
-                inputSchema: ToolInputSchema(
-                    properties: [
-                        "status": ToolSchemaProperty(type: "string", description: "Filter by status: pending, completed, cancelled, or all (default: pending)", enum: ["pending", "completed", "cancelled", "all"]),
-                        "priority": ToolSchemaProperty(type: "string", description: "Filter by priority: low, medium, high, urgent", enum: ["low", "medium", "high", "urgent"])
-                    ]
-                )
-            )
-        case "create_task":
-            return MCPToolInfo(
-                name: tool.name,
-                description: tool.description,
-                inputSchema: ToolInputSchema(
-                    properties: [
-                        "title": ToolSchemaProperty(type: "string", description: "Title of the task"),
-                        "notes": ToolSchemaProperty(type: "string", description: "Optional notes or details"),
-                        "priority": ToolSchemaProperty(type: "string", description: "Priority: low, medium, high, urgent (default: medium)", enum: ["low", "medium", "high", "urgent"]),
-                        "due_date": ToolSchemaProperty(type: "string", description: "Due date in ISO-8601 format (e.g. 2026-11-14T18:00:00Z)")
-                    ],
-                    required: ["title"]
-                )
-            )
-        case "complete_task":
-            return MCPToolInfo(
-                name: tool.name,
-                description: tool.description,
-                inputSchema: ToolInputSchema(
-                    properties: [
-                        "id": ToolSchemaProperty(type: "string", description: "UUID, 8-character ID prefix, or title of the task to mark completed")
-                    ],
-                    required: ["id"]
-                )
-            )
-        case "delete_task":
-            return MCPToolInfo(
-                name: tool.name,
-                description: tool.description,
-                inputSchema: ToolInputSchema(
-                    properties: [
-                        "id": ToolSchemaProperty(type: "string", description: "UUID, 8-character ID prefix, or title of the task to delete"),
-                        "confirm": ToolSchemaProperty(type: "string", description: "Pass 'true' to confirm deletion")
-                    ],
-                    required: ["id"]
-                )
-            )
+            ]
         default:
-            return MCPToolInfo(
-                name: tool.name,
-                description: tool.description,
-                inputSchema: ToolInputSchema(properties: [:])
-            )
+            return []
         }
+    }
+    
+    /// Registers the default T0–T2 tools into the given registry and syncs `CentralToolCatalog.shared`
+    /// when registering into `ToolRegistry.shared`.
+    public static func registerDefaultTools(into registry: ToolRegistry = .shared) {
+        let syncSharedCatalog = (registry === ToolRegistry.shared)
+        for tool in makeDefaultTools() {
+            if registry.tool(named: tool.name) == nil {
+                registry.register(tool)
+            }
+            guard syncSharedCatalog else { continue }
+            
+            let lower = tool.name.lowercased()
+            let existingMeta = CentralToolCatalog.shared.metadata(for: lower)
+            
+            if lower == "reminder" {
+                let args = !tool.argumentDescriptors.isEmpty
+                    ? tool.argumentDescriptors
+                    : (existingMeta?.arguments ?? [])
+                let tcc = !tool.requiredTCC.isEmpty
+                    ? tool.requiredTCC
+                    : (existingMeta?.requiredTCC ?? [])
+                let syncedMeta = ToolMetadata(
+                    name: existingMeta?.name ?? tool.name,
+                    description: existingMeta?.description ?? tool.description,
+                    arguments: args,
+                    tier: tool.tier,
+                    requiredTCC: tcc,
+                    isReversible: tool.isReversible,
+                    requiresConfirmation: existingMeta?.requiresConfirmation ?? (tool.tier >= .t3WorkspaceChanges),
+                    timeoutSeconds: existingMeta?.timeoutSeconds ?? 15.0,
+                    supportsUndo: existingMeta?.supportsUndo ?? tool.isReversible,
+                    nativeAssistantExposed: existingMeta?.nativeAssistantExposed ?? true,
+                    cliExposed: existingMeta?.cliExposed ?? true,
+                    mcpExposed: true
+                )
+                CentralToolCatalog.shared.register(tool, metadata: syncedMeta)
+            } else if tool.argumentDescriptors.isEmpty,
+                      (existingMeta == nil || existingMeta?.arguments.isEmpty == true) {
+                let fallback = fallbackLegacyDescriptors(for: lower)
+                if !fallback.isEmpty {
+                    let syncedMeta = ToolMetadata(
+                        name: tool.name,
+                        description: existingMeta?.description ?? tool.description,
+                        arguments: fallback,
+                        tier: tool.tier,
+                        requiredTCC: !tool.requiredTCC.isEmpty ? tool.requiredTCC : (existingMeta?.requiredTCC ?? []),
+                        isReversible: tool.isReversible,
+                        requiresConfirmation: existingMeta?.requiresConfirmation ?? (tool.tier >= .t3WorkspaceChanges),
+                        timeoutSeconds: existingMeta?.timeoutSeconds ?? 15.0,
+                        supportsUndo: existingMeta?.supportsUndo ?? tool.isReversible,
+                        nativeAssistantExposed: existingMeta?.nativeAssistantExposed ?? true,
+                        cliExposed: existingMeta?.cliExposed ?? true,
+                        mcpExposed: existingMeta?.mcpExposed ?? (tool.tier <= .t2ReadPersonal)
+                    )
+                    CentralToolCatalog.shared.register(tool, metadata: syncedMeta)
+                } else if CentralToolCatalog.shared.tool(named: tool.name) == nil {
+                    CentralToolCatalog.shared.register(tool)
+                }
+            } else if CentralToolCatalog.shared.tool(named: tool.name) == nil {
+                CentralToolCatalog.shared.register(tool)
+            }
+        }
+    }
+    
+    /// Dynamically generates an MCP tool schema from `CentralToolCatalog` / `ToolArgumentDescriptor` metadata.
+    public static func schema(for toolName: String, tool: any PearlTool) -> MCPToolInfo {
+        let lowerName = toolName.lowercased()
+        let catalogMeta = CentralToolCatalog.shared.metadata(for: lowerName)
+            ?? CentralToolCatalog.shared.metadata(for: tool.name)
+        
+        let descriptors: [ToolArgumentDescriptor]
+        if !tool.argumentDescriptors.isEmpty {
+            descriptors = tool.argumentDescriptors
+        } else if let metaArgs = catalogMeta?.arguments, !metaArgs.isEmpty {
+            descriptors = metaArgs
+        } else {
+            descriptors = fallbackLegacyDescriptors(for: lowerName)
+        }
+        
+        var properties: [String: ToolSchemaProperty] = [:]
+        var required: [String] = []
+        for descriptor in descriptors {
+            properties[descriptor.name] = ToolSchemaProperty(
+                type: descriptor.type,
+                description: descriptor.description,
+                enum: descriptor.allowedValues
+            )
+            if descriptor.isRequired && !required.contains(descriptor.name) {
+                required.append(descriptor.name)
+            }
+        }
+        
+        return MCPToolInfo(
+            name: tool.name,
+            description: tool.description,
+            inputSchema: ToolInputSchema(
+                properties: properties,
+                required: required.isEmpty ? nil : required
+            )
+        )
     }
     
     // MARK: - Message Handling
@@ -512,11 +425,44 @@ public final class MCPServer: @unchecked Sendable {
         return JSONRPCResponse(id: id, result: result)
     }
     
-    private func handleToolsList(id: JSONValue) -> JSONRPCResponse {
-        // Collect all tools in registry that are exposed and <= T2
-        let tools = registry.allTools().filter { tool in
-            self.exposedToolNames.contains(tool.name.lowercased()) && tool.tier <= .t2ReadPersonal
+    private func mcpPermittedTools() -> [any PearlTool] {
+        if registry === ToolRegistry.shared {
+            let catalogExposedNames = Set(
+                CentralToolCatalog.shared.exposedTools(for: .mcp).map { $0.name.lowercased() }
+            )
+            return registry.allTools().filter { tool in
+                let lower = tool.name.lowercased()
+                return self.exposedToolNames.contains(lower)
+                    && tool.tier <= .t2ReadPersonal
+                    && catalogExposedNames.contains(lower)
+            }.sorted(by: { $0.name < $1.name })
+        }
+        return registry.allTools().filter { tool in
+            isMCPPolicyPermitted(tool: tool)
         }.sorted(by: { $0.name < $1.name })
+    }
+    
+    private func isMCPPolicyPermitted(tool: any PearlTool) -> Bool {
+        let lower = tool.name.lowercased()
+        guard self.exposedToolNames.contains(lower), tool.tier <= .t2ReadPersonal else {
+            return false
+        }
+        if registry === ToolRegistry.shared {
+            let catalogExposedNames = Set(
+                CentralToolCatalog.shared.exposedTools(for: .mcp).map { $0.name.lowercased() }
+            )
+            return catalogExposedNames.contains(lower)
+        }
+        if let meta = CentralToolCatalog.shared.metadata(for: lower) {
+            let isReminderDefault = (lower == "reminder" && MCPServer.defaultExposedToolNames.contains(lower))
+            return (meta.mcpExposed || isReminderDefault) && meta.tier <= .t2ReadPersonal
+        }
+        return true
+    }
+    
+    private func handleToolsList(id: JSONValue) -> JSONRPCResponse {
+        // Collect all tools in registry that pass exposedTools(for: .mcp), exposedToolNames, and T0–T2 bounds
+        let tools = mcpPermittedTools()
         
         var toolValues: [JSONValue] = []
         let encoder = JSONEncoder()
@@ -541,12 +487,21 @@ public final class MCPServer: @unchecked Sendable {
             return JSONRPCResponse(id: id, error: JSONRPCError(code: -32602, message: "Invalid params: missing tool name"))
         }
         
-        // Extract string arguments
+        // Extract arguments safely
         var args: [String: String] = [:]
         if let argObj = paramObj["arguments"]?.objectValue {
             for (k, v) in argObj {
-                if let s = v.stringValue {
+                switch v {
+                case .string(let s):
                     args[k] = s
+                case .int(let i):
+                    args[k] = String(i)
+                case .double(let d):
+                    args[k] = String(d)
+                case .bool(let b):
+                    args[k] = b ? "true" : "false"
+                default:
+                    break
                 }
             }
         }
@@ -604,8 +559,8 @@ public final class MCPServer: @unchecked Sendable {
             ))
         }
         
-        // 4. Verify tier policy boundary (T0–T2 only)
-        guard tool.tier <= .t2ReadPersonal else {
+        // 4. Verify tier & catalog MCP policy boundary (T0–T2 and exposedTools(for: .mcp) only)
+        guard isMCPPolicyPermitted(tool: tool) else {
             await AuditLogger.shared.log(
                 tool: name,
                 args: args,
@@ -613,9 +568,12 @@ public final class MCPServer: @unchecked Sendable {
                 trustState: .untrusted,
                 success: false
             )
+            let message = tool.tier > .t2ReadPersonal
+                ? "Policy refusal: Tool '\(name)' tier \(tool.tier.rawValue) (T3+) is not exposed over MCP."
+                : "Policy refusal: Tool '\(name)' is excluded from MCP exposure by catalog policy."
             return JSONRPCResponse(id: id, error: JSONRPCError(
                 code: -32002,
-                message: "Policy refusal: Tool '\(name)' tier \(tool.tier.rawValue) (T3+) is not exposed over MCP."
+                message: message
             ))
         }
         
