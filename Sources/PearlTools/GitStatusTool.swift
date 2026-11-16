@@ -23,12 +23,19 @@ public final class GitStatusTool: PearlTool {
             return FileManager.default.currentDirectoryPath
         }()
         
-        let repoPath = args["path"] ?? defaultPath
+        let candidatePath = args["path"] ?? defaultPath
+        let repoPath: String
+        switch FolderAllowlistValidator().validate(path: candidatePath) {
+        case .success(let resolved):
+            repoPath = resolved
+        case .failure(let err):
+            return ToolResult(success: false, message: "Access denied: \(err.localizedDescription)", errorCode: err.toolErrorCode)
+        }
         
         let task = Process()
         task.executableURL = URL(fileURLWithPath: "/usr/bin/git")
         task.currentDirectoryURL = URL(fileURLWithPath: repoPath)
-        task.arguments = ["status", "--porcelain", "-b"]
+        task.arguments = ["-c", "core.fsmonitor=false", "status", "--porcelain", "-b"]
         
         let stdout = Pipe()
         let stderr = Pipe()

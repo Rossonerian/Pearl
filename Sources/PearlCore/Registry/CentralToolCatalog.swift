@@ -64,7 +64,7 @@ public struct ToolMetadata: Sendable {
         self.supportsUndo = supportsUndo ?? isReversible
         self.nativeAssistantExposed = nativeAssistantExposed
         self.cliExposed = cliExposed
-        self.mcpExposed = mcpExposed ?? (tier <= .t2ReadPersonal)
+        self.mcpExposed = mcpExposed ?? false
     }
 }
 
@@ -72,6 +72,18 @@ public struct ToolMetadata: Sendable {
 /// schemas, tiers, reversibility guarantees, and interface exposure policies.
 public final class CentralToolCatalog: @unchecked Sendable {
     public static let shared = CentralToolCatalog(isSharedInstance: true)
+    
+    /// Default set of safe T0–T2 tools exposed over MCP
+    public static let defaultMCPExposedToolNames: Set<String> = [
+        "volume",
+        "battery",
+        "frontmost_app",
+        "open_app",
+        "undo",
+        "screenshot",
+        "reminder",
+        "git_status"
+    ]
     
     private var tools: [String: any PearlTool] = [:]
     private var metadataMap: [String: ToolMetadata] = [:]
@@ -108,7 +120,7 @@ public final class CentralToolCatalog: @unchecked Sendable {
                 requiresConfirmation: false,
                 nativeAssistantExposed: true,
                 cliExposed: true,
-                mcpExposed: true
+                mcpExposed: false
             ),
             ToolMetadata(
                 name: "check_calendar_availability",
@@ -124,7 +136,7 @@ public final class CentralToolCatalog: @unchecked Sendable {
                 requiresConfirmation: false,
                 nativeAssistantExposed: true,
                 cliExposed: true,
-                mcpExposed: true
+                mcpExposed: false
             ),
             ToolMetadata(
                 name: "create_calendar_event",
@@ -144,7 +156,7 @@ public final class CentralToolCatalog: @unchecked Sendable {
                 supportsUndo: true,
                 nativeAssistantExposed: true,
                 cliExposed: true,
-                mcpExposed: true
+                mcpExposed: false
             ),
             ToolMetadata(
                 name: "delete_calendar_event",
@@ -161,7 +173,26 @@ public final class CentralToolCatalog: @unchecked Sendable {
                 supportsUndo: false,
                 nativeAssistantExposed: true,
                 cliExposed: true,
-                mcpExposed: true
+                mcpExposed: false
+            ),
+            ToolMetadata(
+                name: "calendar",
+                description: "Comprehensive macOS calendar management (list events, check availability, create and delete events)",
+                arguments: [
+                    ToolArgumentDescriptor(name: "action", description: "Action: list, check, create, delete (default list)", allowedValues: ["list", "check", "create", "delete"]),
+                    ToolArgumentDescriptor(name: "title", description: "Event title (required for create/delete)"),
+                    ToolArgumentDescriptor(name: "start_date", description: "Start date/time (for create/check)"),
+                    ToolArgumentDescriptor(name: "end_date", description: "End date/time (for create/check)"),
+                    ToolArgumentDescriptor(name: "id", description: "Event identifier (for delete)")
+                ],
+                tier: .t1Reversible,
+                requiredTCC: [.calendar],
+                isReversible: true,
+                requiresConfirmation: false,
+                supportsUndo: true,
+                nativeAssistantExposed: true,
+                cliExposed: true,
+                mcpExposed: false
             ),
             ToolMetadata(
                 name: "get_display_info",
@@ -175,7 +206,7 @@ public final class CentralToolCatalog: @unchecked Sendable {
                 requiresConfirmation: false,
                 nativeAssistantExposed: true,
                 cliExposed: true,
-                mcpExposed: true
+                mcpExposed: false
             ),
             ToolMetadata(
                 name: "read_clipboard",
@@ -189,7 +220,7 @@ public final class CentralToolCatalog: @unchecked Sendable {
                 requiresConfirmation: false,
                 nativeAssistantExposed: true,
                 cliExposed: true,
-                mcpExposed: true
+                mcpExposed: false
             ),
             ToolMetadata(
                 name: "write_clipboard",
@@ -204,7 +235,7 @@ public final class CentralToolCatalog: @unchecked Sendable {
                 supportsUndo: true,
                 nativeAssistantExposed: true,
                 cliExposed: true,
-                mcpExposed: true
+                mcpExposed: false
             ),
             ToolMetadata(
                 name: "post_notification",
@@ -221,7 +252,7 @@ public final class CentralToolCatalog: @unchecked Sendable {
                 requiresConfirmation: false,
                 nativeAssistantExposed: true,
                 cliExposed: true,
-                mcpExposed: true
+                mcpExposed: false
             ),
             
             // Expanded macOS Capability Tools (V3.1 - mcpExposed: false)
@@ -370,7 +401,7 @@ public final class CentralToolCatalog: @unchecked Sendable {
                 supportsUndo: true,
                 nativeAssistantExposed: true,
                 cliExposed: true,
-                mcpExposed: false
+                mcpExposed: true
             ),
             ToolMetadata(
                 name: "list_windows",
@@ -393,9 +424,9 @@ public final class CentralToolCatalog: @unchecked Sendable {
                 ],
                 tier: .t1Reversible,
                 requiredTCC: [.accessibility],
-                isReversible: true,
+                isReversible: false,
                 requiresConfirmation: false,
-                supportsUndo: true,
+                supportsUndo: false,
                 nativeAssistantExposed: true,
                 cliExposed: true,
                 mcpExposed: false
@@ -448,7 +479,7 @@ public final class CentralToolCatalog: @unchecked Sendable {
                 ],
                 tier: .t1Reversible,
                 requiredTCC: [],
-                isReversible: true,
+                isReversible: false,
                 requiresConfirmation: false,
                 supportsUndo: false,
                 nativeAssistantExposed: true,
@@ -573,6 +604,8 @@ public final class CentralToolCatalog: @unchecked Sendable {
                 description: "Execute a web research sub-bot (search, scrape, crawl, map, monitor)",
                 arguments: [
                     ToolArgumentDescriptor(name: "bot_type", description: "Bot type", isRequired: true, allowedValues: ["search", "scrape", "crawl", "map", "monitor"]),
+                    ToolArgumentDescriptor(name: "target", description: "Target URL"),
+                    ToolArgumentDescriptor(name: "url", description: "Target URL alias"),
                     ToolArgumentDescriptor(name: "targets", description: "Target URL(s)"),
                     ToolArgumentDescriptor(name: "query", description: "Search query"),
                     ToolArgumentDescriptor(name: "max_depth", description: "Maximum crawl depth"),
@@ -708,7 +741,7 @@ public final class CentralToolCatalog: @unchecked Sendable {
             supportsUndo: false,
             nativeAssistantExposed: true,
             cliExposed: true,
-            mcpExposed: true
+            mcpExposed: false
         ))
     }
     
@@ -727,7 +760,7 @@ public final class CentralToolCatalog: @unchecked Sendable {
             supportsUndo: tool.isReversible,
             nativeAssistantExposed: true,
             cliExposed: true,
-            mcpExposed: tool.tier <= .t2ReadPersonal
+            mcpExposed: metadata?.mcpExposed ?? (tool.tier <= .t2ReadPersonal && Self.defaultMCPExposedToolNames.contains(key))
         )
         metadataMap[key] = meta
         lock.unlock()

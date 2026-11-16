@@ -189,7 +189,10 @@ public struct SettingsView: View {
             }
             
             Section(header: Label("Updates & Distribution", systemImage: "arrow.triangle.2.circlepath")) {
-                Toggle("Automatically check for updates via Sparkle", isOn: Binding(get: { state.autoCheckUpdates }, set: { state.autoCheckUpdates = $0 }))
+                Toggle("Automatically check for updates via Sparkle", isOn: Binding(
+                    get: { state.autoCheckUpdates },
+                    set: { state.autoCheckUpdates = $0; saveConfig() }
+                ))
                 Text("Updates are verified via EdDSA cryptographic signatures. Hardware profiling and telemetry are permanently disabled.")
                     .font(.caption)
                     .foregroundColor(.secondary)
@@ -217,7 +220,10 @@ public struct SettingsView: View {
     private var tiersAndModelsTab: some View {
         Form {
             Section(header: Label("Execution Tiers", systemImage: "bolt.shield")) {
-                Toggle("Tier 1: Deterministic Actions (< 1 ms)", isOn: Binding(get: { state.deterministicTierEnabled }, set: { state.deterministicTierEnabled = $0 }))
+                Toggle("Tier 1: Deterministic Actions (< 1 ms)", isOn: Binding(
+                    get: { state.deterministicTierEnabled },
+                    set: { state.deterministicTierEnabled = $0; saveConfig() }
+                ))
                 Text("Direct native Swift CoreAudio, IOKit, and NSWorkspace actions. Zero token cost and sub-millisecond latency.")
                     .font(.caption)
                     .foregroundColor(.secondary)
@@ -233,7 +239,10 @@ public struct SettingsView: View {
                     .font(.caption)
                     .foregroundColor(.secondary)
                 
-                Toggle("Tier 3: Cloud Frontier Escalation", isOn: Binding(get: { state.cloudTierEnabled }, set: { state.cloudTierEnabled = $0 }))
+                Toggle("Tier 3: Cloud Frontier Escalation", isOn: Binding(
+                    get: { state.cloudTierEnabled },
+                    set: { state.cloudTierEnabled = $0; saveConfig() }
+                ))
                 Text("Routes complex multi-step reasoning queries to your configured frontier model endpoint.")
                     .font(.caption)
                     .foregroundColor(.secondary)
@@ -577,7 +586,7 @@ public struct SettingsView: View {
         state.maxTokensPerTurn = config.maxTokensPerTurn
         state.activePersona = PersonaEngine.shared.activeMode.rawValue
         state.launchAtLoginEnabled = config.launchAtLoginEnabled
-        state.localLLMTierEnabled = config.mlxEnabled || config.pccEnabled || true
+        state.localLLMTierEnabled = config.mlxEnabled || config.pccEnabled
         state.currentSpendMonth = SpendCapTracker.shared.currentSpend()
         
         if Bundle.main.bundleURL.pathExtension == "app" {
@@ -630,15 +639,11 @@ public struct SettingsView: View {
         guard let selectedURL = FilesystemPermissionManager.shared.promptUserToAuthorizeFolder(suggestedURL: suggestedURL) else {
             return
         }
-        do {
-            let entry = try FilesystemPermissionManager.shared.addApprovedFolder(url: selectedURL, saveBookmark: true)
-            state.folderEntries = FilesystemPermissionManager.shared.approvedFolderEntries()
-            state.folderErrorMessage = nil
-            state.folderStatusMessage = "Authorized \(entry.displayPath)"
-        } catch {
-            state.folderErrorMessage = error.localizedDescription
-            state.folderStatusMessage = ""
-        }
+        let entries = FilesystemPermissionManager.shared.approvedFolderEntries()
+        state.folderEntries = entries
+        state.folderErrorMessage = nil
+        let matched = entries.first(where: { $0.canonicalPath == selectedURL.resolvingSymlinksInPath().path })
+        state.folderStatusMessage = "Authorized \(matched?.displayPath ?? selectedURL.lastPathComponent)"
     }
     
     @MainActor

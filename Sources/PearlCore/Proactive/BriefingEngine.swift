@@ -154,7 +154,9 @@ public actor BriefingEngine {
     // MARK: - Event-Driven Notifications (0.0% Idle CPU Invariant)
     
     private var isNotificationCenterAvailable: Bool {
-        return Bundle.main.bundleIdentifier != nil
+        guard Bundle.main.bundleIdentifier != nil else { return false }
+        return Bundle.main.bundleURL.pathExtension.lowercased() == "app" &&
+               !PearlStoragePaths.isRunningTests
     }
     
     public enum NotificationScheduleResult: Sendable, Equatable {

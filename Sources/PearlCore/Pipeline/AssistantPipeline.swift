@@ -450,7 +450,10 @@ public final class AssistantPipeline: @unchecked Sendable {
                         archetype: activeArchetype
                     )
                     let duration = elapsedMs()
-                    let summaryMsg = job.steps.map { "• [\($0.status.rawValue)] \($0.toolName): \($0.resultMessage ?? "")" }.joined(separator: "\n")
+                    var summaryMsg = job.steps.map { "• [\($0.status.rawValue)] \($0.toolName): \($0.resultMessage ?? "")" }.joined(separator: "\n")
+                    if let err = job.errorMessage, !err.isEmpty, job.status != .completed && job.status != .pausedForApproval {
+                        summaryMsg = "\(err)\n" + summaryMsg
+                    }
                     let isConfirmation = job.status == .pausedForApproval
                     let finalMsg = isConfirmation
                         ? "Confirmation required for multi-step plan '\(job.goal)' (Job \(String(job.id.prefix(8))))."

@@ -151,8 +151,14 @@ public final class VaultWriteTool: PearlTool {
             }
         }
         
-        let journal = self.undoJournal ?? UndoJournal.shared
-        await journal.register(toolName: self.name, undoAction: undoAction)
+        if let customJournal = self.undoJournal {
+            await customJournal.register(toolName: self.name, undoAction: undoAction)
+            return ToolResult(
+                success: true,
+                message: "Successfully wrote note '\(name)' to vault.",
+                undoAction: nil
+            )
+        }
         
         return ToolResult(
             success: true,
@@ -267,15 +273,24 @@ public final class OutputFileTool: PearlTool {
             )
         }
         
-        let targetURL = outputDirectory.appendingPathComponent(sanitizedName).standardizedFileURL
+        let canonicalOutputDir = outputDirectory.resolvingSymlinksInPath()
+        let basePath = canonicalOutputDir.path
+        let targetURL = canonicalOutputDir.appendingPathComponent(sanitizedName).standardizedFileURL
+        let canonicalTarget = targetURL.resolvingSymlinksInPath()
+        guard canonicalTarget.path.hasPrefix(basePath + "/") || canonicalTarget.path == basePath + "/" + sanitizedName else {
+            return ToolResult(
+                success: false,
+                message: "Output file target must remain within output directory."
+            )
+        }
         
         do {
-            try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
+            try FileManager.default.createDirectory(at: canonicalOutputDir, withIntermediateDirectories: true)
             
             let priorData = try? Data(contentsOf: targetURL)
             
             // Atomic write: write to .tmp in same directory, then rename
-            let tempURL = outputDirectory.appendingPathComponent(".\(sanitizedName).\(UUID().uuidString).tmp")
+            let tempURL = canonicalOutputDir.appendingPathComponent(".\(sanitizedName).\(UUID().uuidString).tmp")
             try content.write(to: tempURL, atomically: true, encoding: .utf8)
             
             if FileManager.default.fileExists(atPath: targetURL.path) {
@@ -293,8 +308,14 @@ public final class OutputFileTool: PearlTool {
                 }
             }
             
-            let journal = self.undoJournal ?? UndoJournal.shared
-            await journal.register(toolName: self.name, undoAction: undoAction)
+            if let customJournal = self.undoJournal {
+                await customJournal.register(toolName: self.name, undoAction: undoAction)
+                return ToolResult(
+                    success: true,
+                    message: "Successfully wrote output file to '\(targetURL.path)'.",
+                    undoAction: nil
+                )
+            }
             
             return ToolResult(
                 success: true,

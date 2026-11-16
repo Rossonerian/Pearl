@@ -9,6 +9,7 @@ public enum ApprovalStatus: String, Codable, Sendable {
 public struct PendingApproval: Codable, Sendable, Identifiable, Equatable {
     public let id: String
     public let jobId: String?
+    public let stepIndex: Int?
     public let toolName: String
     public let arguments: [String: String]
     public let tier: ToolTier
@@ -21,6 +22,7 @@ public struct PendingApproval: Codable, Sendable, Identifiable, Equatable {
     public init(
         id: String = UUID().uuidString,
         jobId: String? = nil,
+        stepIndex: Int? = nil,
         toolName: String,
         arguments: [String: String] = [:],
         tier: ToolTier,
@@ -32,6 +34,7 @@ public struct PendingApproval: Codable, Sendable, Identifiable, Equatable {
     ) {
         self.id = id
         self.jobId = jobId
+        self.stepIndex = stepIndex
         self.toolName = toolName
         self.arguments = arguments
         self.tier = tier
@@ -107,11 +110,19 @@ public actor ApprovalQueue {
         arguments: [String: String],
         tier: ToolTier,
         reason: String,
-        jobId: String? = nil
+        jobId: String? = nil,
+        stepIndex: Int? = nil
     ) throws -> PendingApproval {
+        // Prevent duplicate pending approvals for the same plan step
+        if let jobId = jobId, let stepIndex = stepIndex,
+           let existing = items.first(where: { $0.jobId == jobId && $0.stepIndex == stepIndex && $0.status == .pending }) {
+            return existing
+        }
+        
         let item = PendingApproval(
             id: UUID().uuidString,
             jobId: jobId,
+            stepIndex: stepIndex,
             toolName: toolName,
             arguments: arguments,
             tier: tier,
@@ -150,20 +161,34 @@ public actor ApprovalQueue {
             throw ApprovalQueueError.toolNotFound(item.toolName)
         }
         
+        // Mark as approved immediately before execution to prevent concurrent duplicate execution
+        items[index].status = .approved
+        try? save()
+        
         let context = ToolExecutionContext(
             trustState: .trusted,
             userConfirmed: true,
-            providerIsLocal: true
+            providerIsLocal: true,
+            freshConfirmationArgs: item.arguments,
+            freshConfirmationToolName: item.toolName
         )
         
-        let result = try await policyEngine.execute(tool: tool, args: item.arguments, context: context)
-        
-        items[index].status = .approved
-        items[index].executionSucceeded = result.success
-        items[index].executionMessage = result.message
-        try save()
-        
-        return result
+        do {
+            let result = try await policyEngine.execute(tool: tool, args: item.arguments, context: context)
+            if let updatedIndex = items.firstIndex(where: { $0.id == id }) {
+                items[updatedIndex].executionSucceeded = result.success
+                items[updatedIndex].executionMessage = result.message
+                try save()
+            }
+            return result
+        } catch {
+            if let updatedIndex = items.firstIndex(where: { $0.id == id }) {
+                items[updatedIndex].executionSucceeded = false
+                items[updatedIndex].executionMessage = error.localizedDescription
+                try? save()
+            }
+            throw error
+        }
     }
     
     @discardableResult

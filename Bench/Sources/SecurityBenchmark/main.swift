@@ -404,9 +404,15 @@ struct SecurityBenchmarkRunner {
         assert(FileManager.default.fileExists(atPath: cliBinaryURL.path), "pearl-cli binary must exist at \(cliBinaryURL.path)")
         
         // 5.1 Clean state execution test -> must exit 0
+        let pearlDir = PearlStoragePaths.supportDirectory
+        let policyFile = pearlDir.appendingPathComponent("policy.json")
+        var childEnv = ProcessInfo.processInfo.environment
+        childEnv["PEARL_APP_SUPPORT_DIR"] = pearlDir.path
+
         let cleanTask = Process()
         cleanTask.executableURL = cliBinaryURL
         cleanTask.arguments = ["doctor", "--security"]
+        cleanTask.environment = childEnv
         let cleanOut = Pipe()
         cleanTask.standardOutput = cleanOut
         cleanTask.standardError = cleanOut
@@ -421,9 +427,6 @@ struct SecurityBenchmarkRunner {
         
         // 5.2 Seeded misconfiguration test -> must exit non-zero (1)
         print("  ✓ Seeding misconfiguration (modifying policy file to 0777)...")
-        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        let pearlDir = appSupport.appendingPathComponent("Pearl", isDirectory: true)
-        let policyFile = pearlDir.appendingPathComponent("policy.json")
         
         // Save previous permissions
         let origAttrs = try? FileManager.default.attributesOfItem(atPath: policyFile.path)
@@ -435,6 +438,7 @@ struct SecurityBenchmarkRunner {
         let misconfigTask = Process()
         misconfigTask.executableURL = cliBinaryURL
         misconfigTask.arguments = ["doctor", "--security"]
+        misconfigTask.environment = childEnv
         let misconfigOut = Pipe()
         misconfigTask.standardOutput = misconfigOut
         misconfigTask.standardError = misconfigOut
@@ -455,6 +459,7 @@ struct SecurityBenchmarkRunner {
         let restoredTask = Process()
         restoredTask.executableURL = cliBinaryURL
         restoredTask.arguments = ["doctor", "--security"]
+        restoredTask.environment = childEnv
         restoredTask.standardOutput = Pipe()
         try? restoredTask.run()
         restoredTask.waitUntilExit()

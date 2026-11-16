@@ -138,18 +138,25 @@ public final class ContextReferenceResolver: Sendable {
             }
         }
         
-        // 3.5. File / Folder Path Anaphora ("move this file into Archive", "trash that folder", "rename this folder to Archive")
+        // 3.5. File / Folder Path Anaphora ("move this file into Archive", "rename it to Archive", "trash that folder")
         let fileAnaphoraPhrases = ["this file", "that file", "the file", "this folder", "that folder", "the folder", "this directory", "that directory", "the directory"]
-        if fileAnaphoraPhrases.contains(where: { lower.contains($0) }),
+        let fileActionPrefixes = ["rename ", "move ", "copy ", "trash ", "delete ", "remove ", "list ", "read ", "open ", "search "]
+        let hasFileVerb = fileActionPrefixes.contains(where: { lower.hasPrefix($0) })
+        let hasStandaloneItOrThat = lower.range(of: #"\b(?:it|that)\b"#, options: .regularExpression) != nil
+        if (fileAnaphoraPhrases.contains(where: { lower.contains($0) }) || (hasFileVerb && hasStandaloneItOrThat)),
            let recentPath = extractMostRecentPathEntity(from: history) {
             var rewritten = trimmed
             for phrase in fileAnaphoraPhrases {
                 rewritten = replacePhrase(in: rewritten, phrase: phrase, with: recentPath)
             }
+            if hasFileVerb && hasStandaloneItOrThat {
+                rewritten = replacePhrase(in: rewritten, phrase: "it", with: recentPath)
+                rewritten = replacePhrase(in: rewritten, phrase: "that", with: recentPath)
+            }
             return ContextResolutionResult(
                 originalUtterance: trimmed,
                 resolvedUtterance: rewritten,
-                didResolve: true,
+                didResolve: rewritten != trimmed,
                 antecedentEntity: recentPath,
                 entityCategory: "filesystem"
             )

@@ -110,6 +110,11 @@ public final class PostNotificationTool: PearlTool {
         message: String,
         playSound: Bool
     ) async -> Bool {
+        guard Bundle.main.bundleIdentifier != nil,
+              Bundle.main.bundleURL.pathExtension.lowercased() == "app",
+              !PearlStoragePaths.isRunningTests else {
+            return false
+        }
         let center = UNUserNotificationCenter.current()
         
         let authorized = await withCheckedContinuation { continuation in
@@ -177,20 +182,37 @@ public final class PostNotificationTool: PearlTool {
         playSound: Bool
     ) async -> Bool {
         return await Task.detached {
-            let escapedMsg = message.replacingOccurrences(of: "\"", with: "\\\"")
-            let escapedTitle = title.replacingOccurrences(of: "\"", with: "\\\"")
-            var script = "display notification \"\(escapedMsg)\" with title \"\(escapedTitle)\""
-            if let sub = subtitle, !sub.isEmpty {
-                let escapedSub = sub.replacingOccurrences(of: "\"", with: "\\\"")
-                script += " subtitle \"\(escapedSub)\""
-            }
-            if playSound {
-                script += " sound name \"default\""
-            }
+            let script = """
+            on run argv
+                set theMsg to item 1 of argv
+                set theTitle to item 2 of argv
+                set theSub to item 3 of argv
+                set playSnd to item 4 of argv
+                if theSub is not "" then
+                    if playSnd is "true" then
+                        display notification theMsg with title theTitle subtitle theSub sound name "default"
+                    else
+                        display notification theMsg with title theTitle subtitle theSub
+                    end if
+                else
+                    if playSnd is "true" then
+                        display notification theMsg with title theTitle sound name "default"
+                    else
+                        display notification theMsg with title theTitle
+                    end if
+                end if
+            end run
+            """
             
             let process = Process()
             process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
-            process.arguments = ["-e", script]
+            process.arguments = [
+                "-e", script,
+                message,
+                title,
+                subtitle ?? "",
+                playSound ? "true" : "false"
+            ]
             do {
                 try process.run()
                 process.waitUntilExit()

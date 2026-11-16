@@ -356,11 +356,40 @@ public final class SubBotManager: @unchecked Sendable {
         }
         
         self.httpFetcher = httpFetcher ?? { url in
+            if Self.isBlockedSSRF(url: url) {
+                throw URLError(.badURL)
+            }
             var request = URLRequest(url: url)
             request.timeoutInterval = 10.0
             request.setValue("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Pearl/3.2 SubBot", forHTTPHeaderField: "User-Agent")
             return try await URLSession.shared.data(for: request)
         }
+    }
+    
+    public static func isBlockedSSRF(url: URL) -> Bool {
+        guard let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https" else {
+            return true
+        }
+        guard let host = url.host?.lowercased() else { return true }
+        if host == "localhost" || host.hasSuffix(".localhost") || host == "0.0.0.0" || host == "::1" {
+            return true
+        }
+        if host == "127.0.0.1" || host.hasPrefix("127.") {
+            return true
+        }
+        if host == "169.254.169.254" || host.hasPrefix("169.254.") {
+            return true
+        }
+        if host.hasPrefix("10.") || host.hasPrefix("192.168.") {
+            return true
+        }
+        if host.hasPrefix("172.") {
+            let parts = host.split(separator: ".")
+            if parts.count >= 2, let second = Int(parts[1]), second >= 16 && second <= 31 {
+                return true
+            }
+        }
+        return false
     }
     
     // MARK: - Batch Execution with Concurrency and Memory Guards
@@ -1129,7 +1158,7 @@ public final class SubBotManager: @unchecked Sendable {
         let payload: [String: Any] = ["query": query, "limit": limit]
         req.httpBody = try? JSONSerialization.data(withJSONObject: payload)
         
-        let (data, response) = try await (httpFetcher(url))
+        let (data, response) = try await URLSession.shared.data(for: req)
         guard let httpRes = response as? HTTPURLResponse, httpRes.statusCode == 200,
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let dataArr = json["data"] as? [[String: Any]] else {

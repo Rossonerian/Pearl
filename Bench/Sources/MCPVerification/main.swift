@@ -28,8 +28,7 @@ struct MCPVerificationRunner {
         var trialCounter = 1
         
         let projectRoot = URL(fileURLWithPath: "/Users/rossonerian/Projects/Pearl")
-        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        let pearlDir = appSupport.appendingPathComponent("Pearl", isDirectory: true)
+        let pearlDir = PearlStoragePaths.supportDirectory
         let auditLogURL = pearlDir.appendingPathComponent("audit.log")
         
         func readLastAuditLine() -> String? {

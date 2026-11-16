@@ -33,19 +33,22 @@ public struct ToolExecutionContext: Sendable {
     public let providerIsLocal: Bool
     public let taintState: TaintState
     public let freshConfirmationArgs: [String: String]?
+    public let freshConfirmationToolName: String?
     
     public init(
         trustState: TrustLevel = .trusted,
         userConfirmed: Bool = false,
         providerIsLocal: Bool = false,
         taintState: TaintState = .clean,
-        freshConfirmationArgs: [String: String]? = nil
+        freshConfirmationArgs: [String: String]? = nil,
+        freshConfirmationToolName: String? = nil
     ) {
         self.trustState = taintState.isTainted ? .untrusted : trustState
         self.userConfirmed = userConfirmed
         self.providerIsLocal = providerIsLocal
         self.taintState = taintState
         self.freshConfirmationArgs = freshConfirmationArgs
+        self.freshConfirmationToolName = freshConfirmationToolName
     }
 }
 

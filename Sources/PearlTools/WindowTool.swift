@@ -67,7 +67,7 @@ public final class ManageWindowTool: PearlTool {
     public let description = "Manage application window state (focus, minimize, maximize, tile_left, tile_right)"
     public let tier = ToolTier.t1Reversible
     public let requiredTCC: [TCCService] = [.accessibility]
-    public let isReversible = true
+    public let isReversible = false
     
     public var argumentDescriptors: [ToolArgumentDescriptor] {
         return [

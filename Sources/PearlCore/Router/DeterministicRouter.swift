@@ -102,6 +102,26 @@ public final class DeterministicRouter: Sendable {
             }
         }
         
+        // 1.5. Capability / How-To Meta-Questions before wake/politeness stripping strips "can you " / "could you "
+        let isRawCapabilityQuestion = rawLower.hasSuffix("?") && (
+            rawLower.hasPrefix("can you ") ||
+            rawLower.hasPrefix("could you ") ||
+            rawLower.hasPrefix("would you ") ||
+            rawLower.hasPrefix("are you able ") ||
+            rawLower.hasPrefix("do you know how ") ||
+            rawLower.hasPrefix("do you support ") ||
+            rawLower.hasPrefix("is it possible ") ||
+            rawLower.hasPrefix("how do ") ||
+            rawLower.hasPrefix("how can ")
+        )
+        if isRawCapabilityQuestion {
+            let safeReadSignals = ["battery", "volume", "time", "git status", "branch", "list windows", "display"]
+            let isExplicitNamedCreate = rawLower.contains(" called ") || rawLower.contains(" named ")
+            if !isExplicitNamedCreate && !safeReadSignals.contains(where: { rawLower.contains($0) }) {
+                return nil
+            }
+        }
+        
         // Clean wake words and politeness prefixes/suffixes
         let cleaned = cleanUtterance(trimmed)
         guard !cleaned.isEmpty else { return nil }
@@ -113,12 +133,15 @@ public final class DeterministicRouter: Sendable {
         // Guard against meta/explanatory questions masquerading as imperative actions
         let isExplanatoryQuestion = (
             lower.hasPrefix("how do i ") ||
+            lower.hasPrefix("how can i ") ||
             lower.hasPrefix("how to ") ||
             lower.hasPrefix("what does ") ||
             lower.hasPrefix("what is the ") ||
             lower.hasPrefix("why ") ||
             lower.hasPrefix("explain ") ||
             lower.hasPrefix("can you explain ") ||
+            lower.hasPrefix("are you able ") ||
+            lower.hasPrefix("is it possible ") ||
             lower.hasPrefix("should i ")
         )
         

@@ -771,11 +771,11 @@ public final class DeleteCalendarEventTool: PearlTool {
         let targetDesc = eventID ?? titleQuery!
         
         // User confirmation verification
-        let isConfirmed = context.userConfirmed || args["confirm"]?.lowercased() == "true"
+        let isConfirmed = context.userConfirmed
         guard isConfirmed else {
             return ToolResult(
                 success: false,
-                message: "Confirmation required: Deleting calendar event '\(targetDesc)' is irreversible. Please confirm deletion by supplying confirm='true'."
+                message: "Confirmation required: Deleting calendar event '\(targetDesc)' is irreversible. User confirmation required via HUD prompt or --confirm."
             )
         }
         

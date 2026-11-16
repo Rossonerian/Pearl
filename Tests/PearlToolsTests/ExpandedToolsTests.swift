@@ -238,7 +238,7 @@ final class ExpandedToolsTests: XCTestCase {
     func testOpenURLToolValidHTTPSScheme() {
         let tool = OpenURLTool()
         XCTAssertEqual(tool.tier, .t1Reversible)
-        XCTAssertTrue(tool.isReversible)
+        XCTAssertFalse(tool.isReversible)
         XCTAssertEqual(tool.name, "open_url")
     }
     
@@ -293,7 +293,7 @@ final class ExpandedToolsTests: XCTestCase {
         XCTAssertEqual(tool.name, "manage_window")
         XCTAssertEqual(tool.tier, .t1Reversible)
         XCTAssertEqual(tool.requiredTCC, [.accessibility])
-        XCTAssertTrue(tool.isReversible)
+        XCTAssertFalse(tool.isReversible)
     }
     
     // MARK: - 8. Shortcuts Tool Tests

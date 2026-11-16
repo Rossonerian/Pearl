@@ -315,17 +315,18 @@ public final class ReadFileSafeTool: PearlTool {
             )
         }
 
-        let fileHandle: FileHandle
-        do {
-            fileHandle = try FileHandle(forReadingFrom: URL(fileURLWithPath: resolvedPath))
-        } catch {
+        let fd = Darwin.open(resolvedPath, O_RDONLY | O_NOFOLLOW)
+        guard fd >= 0 else {
+            let err = errno
+            let code: PearlToolErrorCode = (err == ELOOP || err == EACCES || err == EPERM) ? .permissionDenied : .parentMissing
             return ToolResult(
                 success: false,
-                message: "Could not open file handle for reading: \(resolvedPath)",
-                errorCode: FileToolErrorMapper.mapErrorCode(error) ?? .permissionDenied,
+                message: "Could not open file for reading (errno \(err)): \(resolvedPath)",
+                errorCode: code,
                 canonicalPath: resolvedPath
             )
         }
+        let fileHandle = FileHandle(fileDescriptor: fd, closeOnDealloc: true)
         defer { try? fileHandle.close() }
 
         let maxBytes = 64 * 1024
@@ -530,7 +531,19 @@ public final class CopyFileTool: PearlTool {
 
             let dstPath = transfer.destination
             let undoAction: @Sendable () async throws -> Void = {
-                if PathProbe.entryExists(dstPath) {
+                guard PathProbe.entryExists(dstPath) else { return }
+                if PathProbe.isSymbolicLink(dstPath) {
+                    unlink(dstPath)
+                    return
+                }
+                var isDir: ObjCBool = false
+                if FileManager.default.fileExists(atPath: dstPath, isDirectory: &isDir) {
+                    if isDir.boolValue {
+                        let contents = (try? FileManager.default.contentsOfDirectory(atPath: dstPath)) ?? []
+                        if !contents.isEmpty {
+                            throw SafeUndoError.nonEmptyDirectory(dstPath)
+                        }
+                    }
                     try FileManager.default.removeItem(atPath: dstPath)
                 }
             }

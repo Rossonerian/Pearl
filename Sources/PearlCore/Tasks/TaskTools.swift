@@ -295,11 +295,11 @@ public final class DeleteTaskTool: PearlTool {
                 return ToolResult(success: false, message: "Task '\(identifier)' not found.")
             }
             
-            let isExplicitlyConfirmed = context.userConfirmed || args["confirm"]?.lowercased() == "true"
+            let isExplicitlyConfirmed = context.userConfirmed
             if !isExplicitlyConfirmed {
                 return ToolResult(
                     success: false,
-                    message: "Confirmation required: Deleting task '\(task.title)' [ID: \(task.id.uuidString.prefix(8))] is irreversible. Pass confirm='true' or confirm via HUD prompt."
+                    message: "Confirmation required: Deleting task '\(task.title)' [ID: \(task.id.uuidString.prefix(8))] is irreversible. Confirm via HUD prompt or --confirm."
                 )
             }
             

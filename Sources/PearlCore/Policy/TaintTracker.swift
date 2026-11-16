@@ -84,9 +84,10 @@ public final class TaintTracker: @unchecked Sendable {
         args: [String: String],
         providerIsLocal: Bool,
         userConfirmed: Bool,
-        freshConfirmationArgs: [String: String]? = nil
+        freshConfirmationArgs: [String: String]? = nil,
+        explicitTaintState: TaintState? = nil
     ) -> PolicyDecision {
-        let state = currentState
+        let state = explicitTaintState ?? currentState
         
         guard case .tainted(let source, let reason) = state else {
             return .allowed
@@ -100,10 +101,17 @@ public final class TaintTracker: @unchecked Sendable {
         }
         
         // 2. Exfiltration URL fetches are blocked without confirmation
-        if TaintTracker.containsExfiltrationURL(args: args) && !userConfirmed {
-            return .confirmationRequired(
-                reason: "Exfiltration URL fetch blocked in context tainted by \(source). Explicit user confirmation required showing exact destination: \(args)"
-            )
+        if TaintTracker.containsExfiltrationURL(args: args) {
+            if !userConfirmed {
+                return .confirmationRequired(
+                    reason: "Exfiltration URL fetch blocked in context tainted by \(source). Explicit user confirmation required showing exact destination: \(args)"
+                )
+            }
+            if let confirmedArgs = freshConfirmationArgs, confirmedArgs != args {
+                return .confirmationRequired(
+                    reason: "Exfiltration URL arguments modified after confirmation. Re-confirmation required for '\(tool.name)' showing exact arguments: \(args)"
+                )
+            }
         }
         
         // 3. ANY T3+ tool action requires fresh explicit user confirmation showing exact arguments

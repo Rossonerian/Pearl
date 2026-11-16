@@ -95,7 +95,7 @@ public final class OpenURLTool: PearlTool {
     public let description = "Open an HTTP or HTTPS URL in the default web browser"
     public let tier = ToolTier.t1Reversible
     public let requiredTCC: [TCCService] = []
-    public let isReversible = true
+    public let isReversible = false
     
     public var argumentDescriptors: [ToolArgumentDescriptor] {
         return [

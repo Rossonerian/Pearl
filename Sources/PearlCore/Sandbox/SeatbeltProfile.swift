@@ -23,6 +23,21 @@ public struct SeatbeltProfile: Sendable {
             "\(home)/Library/LaunchAgents",
             "\(home)/Library/Keychains",
             "\(home)/.ssh",
+            "\(home)/.gnupg",
+            "\(home)/.aws",
+            "\(home)/.kube",
+            "\(home)/.pearl",
+            "\(home)/.config/gh",
+            "\(home)/.git-credentials",
+            "\(home)/.netrc",
+            "\(home)/.npmrc",
+            "\(home)/.pypirc",
+            "\(home)/.docker",
+            "\(home)/Library/Messages",
+            "\(home)/Library/Mail",
+            "\(home)/Library/Cookies",
+            "\(home)/Library/Safari",
+            "\(home)/Library/Group Containers",
             appSupport,
             "/Library/LaunchDaemons",
             "/Library/LaunchAgents",
@@ -46,13 +61,14 @@ public struct SeatbeltProfile: Sendable {
     /// Checks if a given path targets or is inside any sensitive location.
     public static func isSensitivePath(_ path: String) -> Bool {
         let expanded = (path as NSString).expandingTildeInPath
-        let canonical = URL(fileURLWithPath: expanded).resolvingSymlinksInPath().path
+        let canonical = URL(fileURLWithPath: expanded).resolvingSymlinksInPath().path.lowercased()
+        let expLower = expanded.lowercased()
         
         for sensitive in defaultSensitivePaths {
-            let expSens = (sensitive as NSString).expandingTildeInPath
-            let canSens = URL(fileURLWithPath: expSens).resolvingSymlinksInPath().path
+            let expSens = (sensitive as NSString).expandingTildeInPath.lowercased()
+            let canSens = URL(fileURLWithPath: expSens).resolvingSymlinksInPath().path.lowercased()
             
-            if expanded == expSens || expanded.hasPrefix(expSens + "/") ||
+            if expLower == expSens || expLower.hasPrefix(expSens + "/") ||
                canonical == canSens || canonical.hasPrefix(canSens + "/") {
                 return true
             }
@@ -114,13 +130,27 @@ public struct SeatbeltProfile: Sendable {
         }
         
         // 5. Strict read denials for highly sensitive credentials
-        let home = FileManager.default.homeDirectoryForCurrentUser.path
-        let sshPath = "\(home)/.ssh"
-        let sshCanon = URL(fileURLWithPath: sshPath).resolvingSymlinksInPath().path
         lines.append(";; Deny read to sensitive credentials")
-        lines.append("(deny file-read* (subpath \"\(sshPath)\"))")
-        if sshCanon != sshPath {
-            lines.append("(deny file-read* (subpath \"\(sshCanon)\"))")
+        let sensitiveReadRoots = [
+            "~/.ssh",
+            "~/.gnupg",
+            "~/.aws",
+            "~/.kube",
+            "~/Library/Keychains",
+            "~/Library/Application Support/Pearl"
+        ]
+        var addedReadSubpaths = Set<String>()
+        for sensRead in sensitiveReadRoots {
+            let expanded = (sensRead as NSString).expandingTildeInPath
+            let canonical = URL(fileURLWithPath: expanded).resolvingSymlinksInPath().path
+            if !addedReadSubpaths.contains(expanded) {
+                lines.append("(deny file-read* (subpath \"\(expanded)\"))")
+                addedReadSubpaths.insert(expanded)
+            }
+            if !addedReadSubpaths.contains(canonical) {
+                lines.append("(deny file-read* (subpath \"\(canonical)\"))")
+                addedReadSubpaths.insert(canonical)
+            }
         }
         
         // 6. Network controls

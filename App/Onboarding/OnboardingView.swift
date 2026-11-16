@@ -1,6 +1,7 @@
 import SwiftUI
 import AppKit
 import AVFoundation
+import CoreServices
 import Observation
 import PearlCore
 
@@ -399,7 +400,19 @@ public struct OnboardingView: View {
         default: state.micAuthorized = false
         }
         state.accessibilityAuthorized = AXIsProcessTrusted()
-        state.automationAuthorized = true
+        state.automationAuthorized = checkAutomationPermission()
+    }
+    
+    private func checkAutomationPermission() -> Bool {
+        var targetDesc = AEAddressDesc()
+        let bundleId = "com.apple.finder"
+        let err = bundleId.withCString { cStr in
+            AECreateDesc(DescType(typeApplicationBundleID), cStr, strlen(cStr), &targetDesc)
+        }
+        guard err == noErr else { return false }
+        defer { AEDisposeDesc(&targetDesc) }
+        let status = AEDeterminePermissionToAutomateTarget(&targetDesc, DescType(typeWildCard), DescType(typeWildCard), false)
+        return status == noErr
     }
     
     private func saveConfiguration() {

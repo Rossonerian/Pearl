@@ -29,6 +29,7 @@ public final class UnixSocketServer: @unchecked Sendable {
         try FileManager.default.createDirectory(at: parentDir, withIntermediateDirectories: true, attributes: [
             .posixPermissions: 0o700
         ])
+        _ = chmod(parentDir.path, 0o700)
         
         // Remove any stale socket file before binding
         unlink(socketPath)
@@ -56,19 +57,20 @@ public final class UnixSocketServer: @unchecked Sendable {
             }
         }
         
+        let oldUmask = umask(0o077)
         let bindResult = withUnsafePointer(to: &addr) { ptr in
             ptr.withMemoryRebound(to: sockaddr.self, capacity: 1) { saPtr in
                 Darwin.bind(serverFD, saPtr, socklen_t(MemoryLayout<sockaddr_un>.size))
             }
         }
+        chmod(socketPath, 0o600)
+        umask(oldUmask)
         
         guard bindResult == 0 else {
             let err = errno
             close(serverFD)
             throw POSIXError(POSIXErrorCode(rawValue: err) ?? .EIO)
         }
-        
-        chmod(socketPath, 0o600)
         
         guard listen(serverFD, 16) == 0 else {
             let err = errno

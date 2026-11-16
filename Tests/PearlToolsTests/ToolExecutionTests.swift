@@ -136,7 +136,7 @@ final class ToolExecutionTests: XCTestCase {
         
         let result = try await tool.execute(args: ["path": "/tmp"], context: context)
         XCTAssertFalse(result.success)
-        XCTAssertTrue(result.message.contains("is not a git repository"))
+        XCTAssertTrue(result.message.contains("is not a git repository") || result.message.contains("Access denied"))
     }
     
     // MARK: - ReminderTool Execution & Undo

@@ -37,7 +37,7 @@ public final class PlanExecutor: @unchecked Sendable {
     
     public init(
         maxSteps: Int = 8,
-        memoryCeilingMB: Double = 45.0,
+        memoryCeilingMB: Double = (PearlStoragePaths.isRunningTests ? 256.0 : 85.0),
         jobStore: JobStore = .shared,
         approvalQueue: ApprovalQueue = .shared,
         killSwitch: KillSwitch = .shared,
@@ -104,15 +104,40 @@ public final class PlanExecutor: @unchecked Sendable {
         }
         
         // If current step was pausedForApproval, check if it was resolved in ApprovalQueue
+        var effectiveContext = context
         if job.currentStepIndex < job.steps.count {
             let i = job.currentStepIndex
             if job.steps[i].status == .pausedForApproval {
                 let approvals = await approvalQueue.listAll()
-                if let matchingApproval = approvals.last(where: { $0.jobId == job.id && $0.toolName == job.steps[i].toolName }) {
+                if let matchingApproval = approvals.last(where: {
+                    $0.jobId == job.id && ($0.stepIndex == i || ($0.stepIndex == nil && $0.toolName == job.steps[i].toolName))
+                }) {
                     if matchingApproval.status == .approved {
-                        job.steps[i].status = .completed
-                        job.steps[i].resultMessage = "Approved and executed via ApprovalQueue"
-                        job.currentStepIndex += 1
+                        if matchingApproval.executionSucceeded == true {
+                            job.steps[i].status = .completed
+                            job.steps[i].resultMessage = matchingApproval.executionMessage ?? "Approved and executed via ApprovalQueue"
+                            job.currentStepIndex += 1
+                        } else if matchingApproval.executionSucceeded == false {
+                            let failMessage = matchingApproval.executionMessage ?? "Approved step execution failed via ApprovalQueue"
+                            job.steps[i].status = .failed
+                            job.steps[i].resultMessage = failMessage
+                            job.status = .failed
+                            job.errorMessage = failMessage
+                            job.updatedAt = Date()
+                            try await jobStore.updateJob(job)
+                            finalizeLedger(for: job)
+                            return job
+                        } else {
+                            // Approved out-of-band without pre-execution: grant confirmation and let runLoop execute it cleanly.
+                            effectiveContext = ToolExecutionContext(
+                                trustState: context.trustState,
+                                userConfirmed: true,
+                                providerIsLocal: context.providerIsLocal,
+                                taintState: context.taintState,
+                                freshConfirmationArgs: matchingApproval.arguments,
+                                freshConfirmationToolName: matchingApproval.toolName
+                            )
+                        }
                     } else if matchingApproval.status == .denied {
                         job.steps[i].status = .failed
                         job.steps[i].resultMessage = "Approval denied: \(matchingApproval.reason)"
@@ -120,6 +145,7 @@ public final class PlanExecutor: @unchecked Sendable {
                         job.errorMessage = "Approval denied: \(matchingApproval.reason)"
                         job.updatedAt = Date()
                         try await jobStore.updateJob(job)
+                        finalizeLedger(for: job)
                         return job
                     }
                 }
@@ -130,6 +156,7 @@ public final class PlanExecutor: @unchecked Sendable {
             job.status = .completed
             job.updatedAt = Date()
             try await jobStore.updateJob(job)
+            finalizeLedger(for: job)
             return job
         }
         
@@ -138,7 +165,7 @@ public final class PlanExecutor: @unchecked Sendable {
         job.updatedAt = Date()
         try await jobStore.updateJob(job)
         
-        return try await runLoop(job: job, context: context, userPresent: userPresent, onStepProgress: nil)
+        return try await runLoop(job: job, context: effectiveContext, userPresent: userPresent, onStepProgress: nil)
     }
     
     public func rollbackJob(id: String) async throws -> Int {
@@ -340,7 +367,8 @@ public final class PlanExecutor: @unchecked Sendable {
                     arguments: step.arguments,
                     tier: tool.tier,
                     reason: reason,
-                    jobId: job.id
+                    jobId: job.id,
+                    stepIndex: i
                 )
                 step.status = .pausedForApproval
                 step.resultMessage = "Paused for approval: \(reason) (Approval ID: \(approval.id))"

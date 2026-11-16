@@ -63,16 +63,30 @@ public final class VaultManager: @unchecked Sendable {
         
         let pathWithExt = trimmed.hasSuffix(".md") ? trimmed : "\(trimmed).md"
         
-        let resolvedURL = vaultURL.appendingPathComponent(pathWithExt).standardizedFileURL
-        let basePath = vaultURL.standardizedFileURL.path
-        let resolvedPath = resolvedURL.path
+        let canonicalVault = vaultURL.resolvingSymlinksInPath()
+        let basePath = canonicalVault.path
+        let resolvedURL = canonicalVault.appendingPathComponent(pathWithExt).standardizedFileURL
+        let canonicalTarget = resolvedURL.resolvingSymlinksInPath()
+        let resolvedPath = canonicalTarget.path
         
         guard resolvedPath.hasPrefix(basePath + "/") else {
             throw VaultError.invalidNoteName(name)
         }
         
+        // Prevent symlink traversal out of vault
+        var probe = resolvedURL
+        while probe.path.hasPrefix(basePath) && probe.path != basePath {
+            var statBuf = stat()
+            if lstat(probe.path, &statBuf) == 0 {
+                if (statBuf.st_mode & S_IFMT) == S_IFLNK {
+                    throw VaultError.invalidNoteName("Symlinks within vault are forbidden: \(name)")
+                }
+            }
+            probe = probe.deletingLastPathComponent()
+        }
+        
         let relativePath = String(resolvedPath.dropFirst(basePath.count + 1))
-        return (resolvedURL, relativePath)
+        return (canonicalTarget, relativePath)
     }
     
     /// Writes a note atomically (.tmp + rename) with YAML frontmatter and optional wikilinks section.

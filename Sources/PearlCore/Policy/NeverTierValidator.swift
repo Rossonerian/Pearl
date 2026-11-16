@@ -20,14 +20,17 @@ public enum NeverTierValidator: Sendable {
         let lower = command.lowercased()
         
         // 1. Privilege escalation
-        if lower.contains("sudo ") || lower == "sudo" || lower.contains("su ") ||
+        if lower.contains("sudo ") || lower == "sudo" || lower.contains("/sudo") || lower.contains("su ") ||
            lower.contains("dscl ") || lower.contains("dseditgroup") {
             return .deny(threatType: "Privilege escalation", reason: "NeverTier: Privilege escalation (sudo/admin accounts/credentials)")
         }
         
         // 2. Filesystem root destruction & disk erase
-        if lower.contains("rm -rf /") || lower.contains("rm -rf ~") ||
-           lower.contains("diskutil erase") || lower.contains("mkfs") || lower.contains("dd if=") {
+        let normalizedRm = lower.replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+        if normalizedRm.contains("rm -rf /") || normalizedRm.contains("rm -fr /") ||
+           normalizedRm.contains("rm -r -f /") || normalizedRm.contains("rm -f -r /") ||
+           normalizedRm.contains("rm -rf ~") || normalizedRm.contains("rm -fr ~") ||
+           normalizedRm.contains("diskutil erase") || normalizedRm.contains("mkfs") || normalizedRm.contains("dd if=") {
             return .deny(threatType: "Filesystem root destruction", reason: "NeverTier: Destruction of filesystem root, home directory, or raw block devices")
         }
         
@@ -106,8 +109,9 @@ public enum NeverTierValidator: Sendable {
         }
         
         // 13. Pearl state/audit/policy files
-        let appSupport = ("~/Library/Application Support/Pearl" as NSString).expandingTildeInPath
-        if command.contains(appSupport) && (lower.contains("rm ") || lower.contains(">") || lower.contains("mv ")) {
+        let appSupport = ("~/Library/Application Support/Pearl" as NSString).expandingTildeInPath.lowercased()
+        if (lower.contains(appSupport) || lower.contains("~/library/application support/pearl")) &&
+           (lower.contains("rm ") || lower.contains(">") || lower.contains("mv ")) {
             return .deny(threatType: "Pearl integrity", reason: "NeverTier: Tampering with Pearl's audit, policy, or state files")
         }
         
@@ -117,12 +121,15 @@ public enum NeverTierValidator: Sendable {
     /// Evaluates executable URL and arguments array
     public static func validate(executable: String, arguments: [String]) -> CheckResult {
         let execLower = executable.lowercased()
+        let baseExec = (execLower as NSString).lastPathComponent
+        let shellExecs = ["sh", "bash", "zsh", "python", "python3", "ruby", "perl", "osascript"]
         
-        // Reject any invocation of shell with -c
-        if (execLower.hasSuffix("/sh") || execLower.hasSuffix("/bash") || execLower.hasSuffix("/zsh") ||
-            execLower == "sh" || execLower == "bash" || execLower == "zsh") {
-            if arguments.contains("-c") || arguments.contains("-e") {
-                return .deny(threatType: "Raw shell string execution", reason: "NeverTier: Execution of dynamic shell strings (-c) is strictly forbidden")
+        if shellExecs.contains(baseExec) {
+            for arg in arguments {
+                let lowArg = arg.lowercased()
+                if lowArg == "-c" || lowArg == "-e" || (lowArg.hasPrefix("-") && (lowArg.hasSuffix("c") || lowArg.hasSuffix("e"))) {
+                    return .deny(threatType: "Raw shell string execution", reason: "NeverTier: Execution of dynamic shell strings (-c/-e) is strictly forbidden")
+                }
             }
         }
         

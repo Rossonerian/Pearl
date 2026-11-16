@@ -1006,9 +1006,15 @@ case "tasks", "task":
                 let filtered = args.dropFirst(2).filter { $0 != "--confirm" && $0 != "-y" }
                 let target = filtered.joined(separator: " ")
                 let tool = DeleteTaskTool()
-                let res = try await tool.execute(
-                    args: ["id": target, "confirm": confirm ? "true" : "false"],
-                    context: ToolExecutionContext(userConfirmed: confirm)
+                let res = try await PolicyEngine.shared.execute(
+                    tool: tool,
+                    args: ["id": target],
+                    context: ToolExecutionContext(
+                        trustState: .trusted,
+                        userConfirmed: confirm,
+                        freshConfirmationArgs: ["id": target],
+                        freshConfirmationToolName: tool.name
+                    )
                 )
                 print(res.message)
             default:

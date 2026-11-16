@@ -127,9 +127,10 @@ public final class HUDPanel: NSPanel {
                 context.duration = 0.18
                 context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
                 self.animator().setFrame(targetRect, display: true)
+                self.hudView.animator().frame = NSRect(x: 0, y: 0, width: targetWidth, height: targetHeight)
+            } completionHandler: { [weak self] in
+                self?.hudView.layout()
             }
-            hudView.frame = NSRect(x: 0, y: 0, width: targetWidth, height: targetHeight)
-            hudView.layout()
         }
     }
     

@@ -8,8 +8,11 @@ public enum PolicyDecision: Sendable {
 
 public final class PolicyEngine: Sendable {
     public static let shared = PolicyEngine()
+    public let undoJournal: UndoJournal
     
-    public init() {}
+    public init(undoJournal: UndoJournal = .shared) {
+        self.undoJournal = undoJournal
+    }
     
     public func evaluate(tool: any PearlTool, args: [String: String], context: ToolExecutionContext) -> PolicyDecision {
         // 1. Never-Tier validation: hard-blocked commands and paths
@@ -31,7 +34,8 @@ public final class PolicyEngine: Sendable {
                 args: args,
                 providerIsLocal: context.providerIsLocal,
                 userConfirmed: context.userConfirmed,
-                freshConfirmationArgs: context.freshConfirmationArgs
+                freshConfirmationArgs: context.freshConfirmationArgs,
+                explicitTaintState: effectiveTaint
             )
             if case .allowed = taintDecision {
                 // allowed under taint rules, proceed to standard checks
@@ -40,12 +44,17 @@ public final class PolicyEngine: Sendable {
             }
         }
         
-        let explicitFlagConfirmed = (
-            context.trustState == .trusted &&
-            !effectiveTaint.isTainted &&
-            args["confirm"]?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "true"
-        )
-        let isConfirmed = context.userConfirmed || explicitFlagConfirmed
+        let isConfirmed = context.userConfirmed
+        if isConfirmed {
+            if let confirmedTool = context.freshConfirmationToolName,
+               !confirmedTool.isEmpty,
+               confirmedTool.lowercased() != tool.name.lowercased() {
+                return .confirmationRequired(reason: "Tool action modified from '\(confirmedTool)' to '\(tool.name)' after confirmation prompt. Re-confirmation required.")
+            }
+            if let confirmedArgs = context.freshConfirmationArgs, confirmedArgs != args {
+                return .confirmationRequired(reason: "Action arguments modified after confirmation prompt for '\(tool.name)'. Re-confirmation required.")
+            }
+        }
         
         // 4. Untrusted context cannot perform T3+ actions without explicit user confirmation
         if context.trustState == .untrusted && tool.tier >= .t3WorkspaceChanges {
@@ -91,7 +100,7 @@ public final class PolicyEngine: Sendable {
             
             // If tool produced an undo action, register with UndoJournal
             if let undo = result.undoAction {
-                await UndoJournal.shared.register(toolName: tool.name, undoAction: undo)
+                await undoJournal.register(toolName: tool.name, undoAction: undo)
             }
             
             return result

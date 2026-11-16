@@ -158,10 +158,22 @@ public final class FilesystemPermissionManager: @unchecked Sendable {
         "~/.gnupg",
         "~/.aws",
         "~/.kube",
+        "~/.pearl",
+        "~/.config/gh",
+        "~/.git-credentials",
+        "~/.netrc",
+        "~/.npmrc",
+        "~/.pypirc",
+        "~/.docker",
         "~/Library/Keychains",
         "~/Library/LaunchAgents",
         "~/Library/LaunchDaemons",
-        "~/Library/Application Support/Pearl"
+        "~/Library/Application Support/Pearl",
+        "~/Library/Messages",
+        "~/Library/Mail",
+        "~/Library/Cookies",
+        "~/Library/Safari",
+        "~/Library/Group Containers"
     ]
 
     private struct StoredBookmarkRecord: Codable, Sendable {
@@ -578,7 +590,10 @@ public final class FilesystemPermissionManager: @unchecked Sendable {
     // MARK: - Internal Helpers
 
     private func validateNewApprovedRoot(_ canonical: String, rawPath: String) throws {
-        if canonical == "/" || canonical == "/private" || canonical == "/var" {
+        let homeCanon = URL(fileURLWithPath: NSHomeDirectory()).resolvingSymlinksInPath().path
+        let libraryCanon = URL(fileURLWithPath: (("~/Library" as NSString).expandingTildeInPath)).resolvingSymlinksInPath().path
+        
+        if canonical == "/" || canonical == "/private" || canonical == "/var" || canonical == "/Users" || canonical == homeCanon || canonical == libraryCanon {
             throw FolderValidationError.sensitivePathBlocked(path: canonical)
         }
         if Self.isSensitiveOrSystemPath(canonicalPath: canonical, rawPath: rawPath) {

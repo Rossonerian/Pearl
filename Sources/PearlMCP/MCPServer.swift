@@ -161,16 +161,7 @@ public struct MCPToolInfo: Codable, Sendable {
 public final class MCPServer: @unchecked Sendable {
     
     /// Default set of safe T0–T2 tools exposed over MCP
-    public static let defaultExposedToolNames: Set<String> = [
-        "volume",
-        "battery",
-        "frontmost_app",
-        "open_app",
-        "undo",
-        "screenshot",
-        "reminder",
-        "git_status"
-    ]
+    public static let defaultExposedToolNames: Set<String> = CentralToolCatalog.defaultMCPExposedToolNames
     
     public let exposedToolNames: Set<String>
     public private(set) var isInitialized: Bool = false
@@ -509,8 +500,18 @@ public final class MCPServer: @unchecked Sendable {
         let lowerName = name.lowercased()
         
         // 1. Check NeverTier & Destructive Tools
-        let commandString = ([lowerName] + args.values).joined(separator: " ")
-        let neverCheck = NeverTierValidator.validate(command: commandString)
+        let sortedArgValues = args.keys.sorted().compactMap { args[$0] }
+        let commandString = ([lowerName] + sortedArgValues).joined(separator: " ")
+        var neverCheck = NeverTierValidator.validate(command: commandString)
+        if !neverCheck.isDenied {
+            for val in sortedArgValues {
+                let singleCheck = NeverTierValidator.validate(command: val)
+                if singleCheck.isDenied {
+                    neverCheck = singleCheck
+                    break
+                }
+            }
+        }
         let isDestructive = lowerName == "rm" || lowerName == "shell_execute" || lowerName == "git_push_force" ||
                             lowerName.contains("format") || lowerName.contains("wipe")
         
@@ -577,7 +578,17 @@ public final class MCPServer: @unchecked Sendable {
             ))
         }
         
-        // 5. Execute tool via PolicyEngine with untrusted context
+        // 5. Validate required tool arguments
+        for descriptor in tool.argumentDescriptors where descriptor.isRequired {
+            guard let val = args[descriptor.name]?.trimmingCharacters(in: .whitespacesAndNewlines), !val.isEmpty else {
+                return JSONRPCResponse(id: id, error: JSONRPCError(
+                    code: -32602,
+                    message: "Invalid params: missing required argument '\(descriptor.name)' for tool '\(name)'"
+                ))
+            }
+        }
+        
+        // 6. Execute tool via PolicyEngine with untrusted context
         let context = ToolExecutionContext(trustState: .untrusted, userConfirmed: false, providerIsLocal: true)
         do {
             let result = try await policyEngine.execute(tool: tool, args: args, context: context)
