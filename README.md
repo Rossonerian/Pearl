@@ -1,4 +1,4 @@
-# Pearl (v3.2.0)
+# Pearl (v3.3.0)
 
 > Capable, private, lightweight native macOS personal AI assistant built in compiled Swift for Apple Silicon.
 
@@ -7,19 +7,45 @@
 [![License](https://img.shields.io/badge/license-MIT%20%2F%20Apache--2.0-green.svg)](LICENSE)
 [![Zero Telemetry](https://img.shields.io/badge/telemetry-0%20call%20home-brightgreen.svg)](PRIVACY.md)
 [![MCP Compliant](https://img.shields.io/badge/MCP-2024--11--05-purple.svg)](docs/MCP.md)
-[![Tests](https://img.shields.io/badge/tests-209%2F209%20passed%20(100%25)-brightgreen.svg)](Tests/)
+[![Tests](https://img.shields.io/badge/tests-240%2F240%20passed%20(100%25)-brightgreen.svg)](Tests/)
 
 ---
 
 ## Overview
 
-Pearl V3 is a local-first, native macOS personal AI assistant engineered specifically for Apple Silicon (optimized for MacBook Neo, A18 Pro, and M-Series Macs with 8 GB unified memory). Built in compiled Swift, Pearl replaces heavyweight Electron shells and Python daemons with direct in-process AppKit, CoreAudio, EventKit, SQLite, and IOKit system calls.
+Pearl V3.3 is a local-first, native macOS personal AI assistant engineered specifically for Apple Silicon (optimized for MacBook Neo, A18 Pro, and M-Series Macs with 8 GB unified memory). Built in compiled Swift, Pearl replaces heavyweight Electron shells and Python daemons with direct in-process AppKit, CoreAudio, EventKit, SQLite, and IOKit system calls.
 
 It presents an ultra-responsive floating pill HUD beneath the display notch, supports push-to-talk voice commands, multi-turn conversational reasoning with anaphoric reference resolution ("open Safari" $\rightarrow$ "now close it"), inspectable 6-class personal memory, typed task management, event-driven proactivity, and Model Context Protocol (MCP) tool exposure—all operating with **zero telemetry**, **zero background LLM daemons**, and **zero TCP network listeners**.
 
 ---
 
-## What's New in Pearl V3
+## What's New in Pearl V3.3
+
+1. **Native Filesystem Operation Reliability**:
+   - **`create_directory`**: Creates directories with automatic path traversal prevention, symlink escape checks, safe parent validation, and reversible empty-directory rollback.
+   - **`list_directory`**: Safe listing with optional recursion depth, file/folder filtering, and bounded result counts (never recursing entire home root).
+   - **`rename_file`**: Safe item renaming with collision detection and reversible rollback.
+   - **`trash_file`**: macOS Finder Trash integration (`NSFileManager.trashItem`) preventing permanent accidental data loss.
+   - **`FilesystemPermissionManager`**: Dynamic approved folder authorization with security-scoped bookmarks and UI/CLI authorization management.
+
+2. **Unified Tool Registration & Dynamic Tool Diagnostics**:
+   - Single authoritative tool definition path shared between Native Assistant, Deterministic Router, Model Tool Executor, Native HUD, CLI, and MCP.
+   - Dynamic schema injection into `AppleFMProvider` and `FrontierProvider` (replacing hardcoded 12-tool prompts).
+   - Live CLI runtime tool diagnostic commands:
+     - `pearl tools list`: Lists all registered tools, their tiers, reversibility, and interface exposures.
+     - `pearl tools inspect <tool_name>`: Displays exact JSON argument schemas, execution requirements, and security tier.
+     - `pearl tools doctor`: Health-checks running daemon IPC, catalog consistency, and security policies.
+
+3. **Multi-Step Workflow Reliability & Interactive Confirmation**:
+   - Multi-folder creation decomposition ("create Backend, Frontend and Docs on Desktop").
+   - Ambiguity clarification dialogs ("Where should I create it: Desktop, Documents, Downloads or Projects?").
+   - In-capsule interactive confirmation dialog with `[Confirm (Enter)]` and `[Cancel (Esc)]` execution.
+   - Native HUD text input with auto-expanding multiline editor and history recall.
+
+4. **100% Test Suite & Security Audit Remediation**:
+   - 240 / 240 root package XCTest cases passing across `PearlCoreTests`, `PearlMemoryTests`, and `PearlToolsTests`.
+   - 5 / 5 automated benchmark verification suites passing cleanly (`security_bench`, `router_eval`, `mcp_bench`, `task_engine_verification`, `conversation_verification`).
+   - Complete storage and test directory isolation preventing mutation of user files or `~/Library/Application Support/Pearl`.
 
 1. **Structured 6-Class Memory Architecture (`memory.sqlite`)**:
    - Structured SQLite canonical store (`~/Library/Application Support/Pearl/memory.sqlite`) supporting 6 distinct memory classes: Profile, Semantic, Project, Episodic, Working, and Task.

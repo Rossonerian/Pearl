@@ -14,7 +14,7 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 DIST_DIR="${REPO_ROOT}/dist"
 APP_NAME="Pearl"
 BUNDLE_ID="ai.pearl.Pearl"
-VERSION="3.2.0"
+VERSION="3.3.0"
 ENTITLEMENTS="${REPO_ROOT}/App/Pearl.entitlements"
 
 # Defaults
@@ -88,7 +88,7 @@ echo " Building Pearl v${VERSION} in Release Configuration"
 echo "=============================================================================="
 cd "${REPO_ROOT}"
 
-export DEVELOPER_DIR="${DEVELOPER_DIR:-/Library/Developer/CommandLineTools}"
+export DEVELOPER_DIR="${DEVELOPER_DIR:-$(xcode-select -p 2>/dev/null || echo /Applications/Xcode.app/Contents/Developer)}"
 echo "→ Using DEVELOPER_DIR: ${DEVELOPER_DIR}"
 
 echo "→ Compiling release binaries via SwiftPM..."

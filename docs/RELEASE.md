@@ -1,6 +1,6 @@
 # Pearl Release & Publishing Guide
 
-This document describes the end-to-end release, signing, notarization, and distribution process for Pearl V2 on macOS.
+This document describes the end-to-end release, signing, notarization, and distribution process for Pearl V3.3 on macOS.
 
 ---
 

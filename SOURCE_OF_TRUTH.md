@@ -1,12 +1,12 @@
 # Pearl Source of Truth
 
-**Last Updated:** 2026-11-14  
-**Current Release Baseline:** Pearl V2.0.0 (`9fc53ee3640d2a74ca6846475cae262930ad53fe`)  
-**Target Release:** Pearl V3  
-**Active Working Branch:** `audit/v3-repo-audit` (targeting `main` via PR)  
-**Current Milestone:** Phase M0 (Complete Repository Audit) -> Phase M1 (Complete & Stabilize V2 Baseline)  
+**Last Updated:** 2026-11-16  
+**Current Release Baseline:** Pearl V3.3.0  
+**Target Release:** Pearl V3.3.0 Production GA  
+**Active Working Branch:** `fix/v3.3-functional-reliability`  
+**Current Milestone:** Phase 9 (Release Packaging & Documentation) -> Phase 10 (MacBook Neo Live Acceptance)  
 **Hardware Reference:** MacBook Neo (Apple Silicon A18 Pro, 8 GB Unified Memory, 60 Hz Fixed Display, Notchless)  
-**Target Operating System:** macOS 26.0+ / macOS 27 "Golden Gate"
+**Target Operating System:** macOS 26.0+ / macOS 27.2+ "Golden Gate"
 
 ---
 
@@ -14,16 +14,16 @@
 
 | Milestone | Description | Branch / PR | Status |
 | :--- | :--- | :--- | :--- |
-| **M0** | Complete 37-Area Repository Audit & Docs | `audit/v3-repo-audit` | **Completed** |
-| **M1** | Complete & Stabilize V2 Baseline (Pipeline, Tool Execution, Tiers, IPC, Audit) | `fix/v2.1-stabilization` | **Next Up** |
-| **M2** | Memory V3 (SQLite Canonical Store, 6 Classes, Deduplication) | `feat/v3-memory` | **Completed** |
-| **M3** | Conversation & Multi-Turn Intelligence Engine | `feat/v3-conversation` | Scheduled |
-| **M4** | Native macOS Capability Expansion (EventKit Calendar, Window Context) | `feat/v3-macos-capabilities` | Scheduled |
-| **M5** | Voice & Conversation UI Refinement | `feat/v3-voice` | Scheduled |
-| **M6** | Task & Productivity Engine (`TaskStore.sqlite`) | `feat/v3-task-engine` | Scheduled |
-| **M7** | Proactive Assistance Engine (Event-Driven) | `feat/v3-proactive` | Scheduled |
-| **M8** | Testing, SPM Test Targets & CI Workflow | `test/v3-quality-suite` | Scheduled |
-| **M9** | Release, Packaging & Distribution (`Casks/pearl.rb`, Notarization) | `release/v3.0.0` | Scheduled |
+| **Phase 0** | Installed Application Forensics & Diagnostics | `docs/V3/FUNCTIONALITY_FORENSICS.md` | **Completed** |
+| **Phase 1 & 4** | Unified Request Pipeline & Tool Catalog (`pearl tools doctor`) | `fix/v3.3-functional-reliability` | **Completed** |
+| **Phase 2** | Native Filesystem Capabilities (`create_directory`, `list_directory`, `rename_file`, `trash_file`) | `fix/v3.3-functional-reliability` | **Completed** |
+| **Phase 3** | Deterministic Routing & Filesystem Grammar | `fix/v3.3-functional-reliability` | **Completed** |
+| **Phase 5** | Basic macOS Task Reliability (Battery, Volume, Display, Reminders, Tasks, Calendar, Clipboard) | `fix/v3.3-functional-reliability` | **Completed** |
+| **Phase 6** | Multi-Step Workflow Engine & Interactive Confirmation Execution | `fix/v3.3-functional-reliability` | **Completed** |
+| **Phase 7** | Comprehensive Security & Architecture Hardening (17 findings resolved) | `fix/v3.3-functional-reliability` | **Completed** |
+| **Phase 8** | Complete Verification Suite (240/240 XCTest + 5 Bench targets 100% PASS) | `fix/v3.3-functional-reliability` | **Completed** |
+| **Phase 9** | Documentation & Release Packaging (`Pearl-3.3.0.dmg`, `Casks/pearl.rb`) | `fix/v3.3-functional-reliability` | **Completed** |
+| **Phase 10** | Live MacBook Neo Migration & Final Acceptance Gate | `fix/v3.3-functional-reliability` | **In Progress** |
 
 ---
 
