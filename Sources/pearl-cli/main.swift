@@ -845,6 +845,22 @@ case "mcp", "mcp-serve":
 case "tools", "tool":
     let code = handleToolsCommand(subArgs: Array(args.dropFirst()))
     exit(code)
+case "permissions", "permission":
+    let sub = args.count > 1 ? args[1].lowercased() : "status"
+    if sub == "request-automation" || sub == "automation" {
+        let result = sendIPC(command: "request_automation")
+        if let resp = result.response {
+            print(resp.message)
+            print("→ macOS prompt triggered. If a system dialog appeared, click 'Allow'. Pearl is now registered under System Settings → Privacy & Security → Automation.")
+            exit(resp.success ? 0 : 1)
+        } else {
+            print("Error: Pearl daemon must be running to trigger automation permission requests.")
+            exit(1)
+        }
+    } else {
+        print("Usage: pearl permissions request-automation")
+        exit(0)
+    }
 case "doctor":
     let isSecurity = args.contains("--security") || args.count == 1
     let code = DoctorCommand.run(securityOnly: isSecurity)

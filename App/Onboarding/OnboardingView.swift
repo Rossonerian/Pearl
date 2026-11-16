@@ -374,8 +374,10 @@ public struct OnboardingView: View {
             Spacer()
             
             if !granted {
-                Button("Open Settings") {
-                    if let url = URL(string: prefPane) {
+                Button(name.contains("Automation") ? "Request Permission" : "Open Settings") {
+                    if name.contains("Automation") {
+                        requestAutomationPermission()
+                    } else if let url = URL(string: prefPane) {
                         NSWorkspace.shared.open(url)
                     }
                 }
@@ -413,6 +415,24 @@ public struct OnboardingView: View {
         defer { AEDisposeDesc(&targetDesc) }
         let status = AEDeterminePermissionToAutomateTarget(&targetDesc, DescType(typeWildCard), DescType(typeWildCard), false)
         return status == noErr
+    }
+    
+    private func requestAutomationPermission() {
+        for target in ["com.apple.finder", "com.apple.systemevents"] {
+            var targetDesc = AEAddressDesc()
+            let err = target.withCString { cStr in
+                AECreateDesc(DescType(typeApplicationBundleID), cStr, strlen(cStr), &targetDesc)
+            }
+            if err == noErr {
+                defer { AEDisposeDesc(&targetDesc) }
+                _ = AEDeterminePermissionToAutomateTarget(&targetDesc, DescType(typeWildCard), DescType(typeWildCard), true)
+            }
+            let appName = (target == "com.apple.finder") ? "Finder" : "System Events"
+            var scriptErr: NSDictionary?
+            let script = NSAppleScript(source: "tell application \"\(appName)\" to return name")
+            _ = script?.executeAndReturnError(&scriptErr)
+        }
+        checkPermissions()
     }
     
     private func saveConfiguration() {

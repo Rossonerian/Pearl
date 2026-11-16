@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
 import Foundation
+import CoreServices
 import Speech
 import AVFoundation
 import ServiceManagement
@@ -1014,6 +1015,31 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         case "abort":
             KillSwitch.shared.trigger(reason: "Aborted via CLI IPC")
             responseMessage = "KillSwitch triggered: active agent execution halted."
+            
+        case "request_automation":
+            let targets = ["com.apple.finder", "com.apple.systemevents"]
+            var statuses: [String] = []
+            for target in targets {
+                var targetDesc = AEAddressDesc()
+                let err = target.withCString { cStr in
+                    AECreateDesc(DescType(typeApplicationBundleID), cStr, strlen(cStr), &targetDesc)
+                }
+                if err == noErr {
+                    defer { AEDisposeDesc(&targetDesc) }
+                    let status = AEDeterminePermissionToAutomateTarget(&targetDesc, DescType(typeWildCard), DescType(typeWildCard), true)
+                    if status == noErr {
+                        statuses.append("\(target): granted")
+                    } else {
+                        let appName = (target == "com.apple.finder") ? "Finder" : "System Events"
+                        var scriptErr: NSDictionary?
+                        let script = NSAppleScript(source: "tell application \"\(appName)\" to return name")
+                        _ = script?.executeAndReturnError(&scriptErr)
+                        statuses.append("\(target): prompt triggered")
+                    }
+                }
+            }
+            responseMessage = "Automation prompt triggered for: " + statuses.joined(separator: ", ")
+            isSuccess = true
             
         default:
             responseMessage = "Unhandled command: \(cmd)"

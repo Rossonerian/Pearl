@@ -6,6 +6,7 @@ import EventKit
 import AVFoundation
 import Speech
 import CoreGraphics
+import CoreServices
 import ApplicationServices
 import ServiceManagement
 import PearlCore
@@ -564,7 +565,10 @@ public struct SettingsView: View {
                 .foregroundColor(entry.state.tintColor)
             
             if entry.state != .granted {
-                Button("Open Settings…") {
+                Button(entry.id == "automation" ? "Request…" : "Open Settings…") {
+                    if entry.id == "automation" {
+                        requestAutomationPermission()
+                    }
                     openSystemSettingsPane(entry.settingsURL)
                 }
                 .buttonStyle(.bordered)
@@ -718,8 +722,51 @@ public struct SettingsView: View {
                 description: "On-device voice command transcription.",
                 state: mapSpeechStatus(SFSpeechRecognizer.authorizationStatus()),
                 settingsURL: "x-apple.systempreferences:com.apple.preference.security?Privacy_SpeechRecognition"
+            ),
+            TCCPermissionEntry(
+                id: "automation",
+                name: "Automation (Apple Events)",
+                description: "Control Safari, Mail, and System Events for workflow automation.",
+                state: checkAutomationPermissionStatus(),
+                settingsURL: "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation"
             )
         ]
+    }
+    
+    private func checkAutomationPermissionStatus() -> TCCPermissionState {
+        var targetDesc = AEAddressDesc()
+        let bundleId = "com.apple.finder"
+        let err = bundleId.withCString { cStr in
+            AECreateDesc(DescType(typeApplicationBundleID), cStr, strlen(cStr), &targetDesc)
+        }
+        guard err == noErr else { return .notDetermined }
+        defer { AEDisposeDesc(&targetDesc) }
+        let status = AEDeterminePermissionToAutomateTarget(&targetDesc, DescType(typeWildCard), DescType(typeWildCard), false)
+        if status == noErr {
+            return .granted
+        } else if status == errAEEventNotPermitted {
+            return .denied
+        } else {
+            return .notDetermined
+        }
+    }
+    
+    private func requestAutomationPermission() {
+        for target in ["com.apple.finder", "com.apple.systemevents"] {
+            var targetDesc = AEAddressDesc()
+            let err = target.withCString { cStr in
+                AECreateDesc(DescType(typeApplicationBundleID), cStr, strlen(cStr), &targetDesc)
+            }
+            if err == noErr {
+                defer { AEDisposeDesc(&targetDesc) }
+                _ = AEDeterminePermissionToAutomateTarget(&targetDesc, DescType(typeWildCard), DescType(typeWildCard), true)
+            }
+            let appName = (target == "com.apple.finder") ? "Finder" : "System Events"
+            var scriptErr: NSDictionary?
+            let script = NSAppleScript(source: "tell application \"\(appName)\" to return name")
+            _ = script?.executeAndReturnError(&scriptErr)
+        }
+        refreshTCCPermissions()
     }
     
     private func mapEKStatus(_ status: EKAuthorizationStatus) -> TCCPermissionState {
